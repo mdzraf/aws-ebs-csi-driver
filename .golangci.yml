@@ -342,20 +342,49 @@ linters-settings:
     extra-rules: false
 
 linters:
-  enable:
-    - megacheck
-    - govet
+  enable-all: true
+  # enable:
+  #   - megacheck
+  #   - govet
+  #   - err113
+  #   - testpackage
+  #   - paralleltest
+
   disable:
     - maligned
     - prealloc
     - scopelint
     - gosec
+    - dupl # Many false positives
+    - wsl  # Doesn't fit with existing code style
+    - varnamelen 
+    - perfsprint
+    - funlen
   disable-all: false
-  presets:
-    - bugs
-    - unused
+  # presets:
+  #   - bugs
+  #   - unused
   fast: false
-
+# - govet # Already run via `make verify/govet`
+#     - wsl # Doesn't fit with existing code style
+#     - wrapcheck # Many false positives
+#     - varnamelen # Many false positives
+#     - mnd # Many false positives
+#     - gomnd # Many false positives
+#     - testpackage # We don't do this
+#     - paralleltest # TODO FIXME
+#     - depguard # We don't use this
+#     - gomoddirectives # We need `replace` in `go.mod`
+#     - funlen # Many false positives
+#     - dupl # TODO FIXME
+#     - gochecknoglobals  # TODO FIXME
+#     - err113 # TODO FIXME
+#     - interfacebloat # False positives on AWS SDK interfaces
+#     - exhaustruct # TODO FIXME
+#     - lll # TODO FIXME
+#     - nestif # Many false positives
+#     - gocognit # Many false positives
+#     - cyclop # Many false positives
 severity:
   # Default value is empty string.
   # Set the default severity for issues. If severity rules are defined and the issues 

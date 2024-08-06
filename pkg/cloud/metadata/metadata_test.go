@@ -34,6 +34,10 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+var (
+	ec2MetadataErrorGlobal = errors.New("EC2 metadata error")
+)
+
 func TestNewMetadataService(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -61,7 +65,7 @@ func TestNewMetadataService(t *testing.T) {
 		{
 			name:             "TestNewMetadataService: EC2 metadata error, K8s API available",
 			region:           "us-west-2",
-			ec2MetadataError: errors.New("EC2 metadata error"),
+			ec2MetadataError: ec2MetadataErrorGlobal,
 			expectedMetadata: &Metadata{
 				InstanceID:             "i-1234567890abcdef0",
 				InstanceType:           "c5.xlarge",
@@ -74,7 +78,7 @@ func TestNewMetadataService(t *testing.T) {
 		{
 			name:             "TestNewMetadataService: EC2 metadata error, K8s API error",
 			region:           "us-west-2",
-			ec2MetadataError: errors.New("EC2 metadata error"),
+			ec2MetadataError: ec2MetadataErrorGlobal,
 			k8sAPIError:      errors.New("K8s API error"),
 			expectedError:    errors.New("IMDS metadata and Kubernetes metadata are both unavailable"),
 		},

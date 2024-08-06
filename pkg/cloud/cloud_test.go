@@ -53,6 +53,10 @@ const (
 	defaultCreateDiskDeadline = time.Second * 5
 )
 
+var (
+	genericEc2ApiError = fmt.Errorf("generic EC2 API error")
+)
+
 func generateVolumes(volIdCount, volTagCount int) []types.Volume {
 	volumes := make([]types.Volume, 0, volIdCount+volTagCount)
 
@@ -141,7 +145,7 @@ func TestBatchDescribeVolumes(t *testing.T) {
 			mockFunc: func(mockEC2 *MockEC2API, expErr error, volumes []types.Volume) {
 				mockEC2.EXPECT().DescribeVolumes(gomock.Any(), gomock.Any()).Return(nil, expErr).Times(1)
 			},
-			expErr: fmt.Errorf("Generic EC2 API error"),
+			expErr: genericEc2ApiError,
 		},
 		{
 			name:    "fail: volume not found",
@@ -281,7 +285,7 @@ func TestBatchDescribeInstances(t *testing.T) {
 			mockFunc: func(mockEC2 *MockEC2API, expErr error, reservations []types.Reservation) {
 				mockEC2.EXPECT().DescribeInstances(gomock.Any(), gomock.Any()).Return(nil, expErr).Times(1)
 			},
-			expErr: fmt.Errorf("generic EC2 API error"),
+			expErr: genericEc2ApiError,
 		},
 		{
 			name:        "fail: invalid request",
@@ -438,7 +442,7 @@ func TestBatchDescribeSnapshots(t *testing.T) {
 			mockFunc: func(mockEC2 *MockEC2API, expErr error, snapshots []types.Snapshot) {
 				mockEC2.EXPECT().DescribeSnapshots(gomock.Any(), gomock.Any()).Return(nil, expErr).Times(2)
 			},
-			expErr: fmt.Errorf("generic EC2 API error"),
+			expErr: genericEc2ApiError,
 		},
 		{
 			name:      "fail: Snapshot not found by ID",
@@ -575,7 +579,7 @@ func TestBatchDescribeVolumesModifications(t *testing.T) {
 			mockFunc: func(mockEC2 *MockEC2API, expErr error, volumeModifications []types.VolumeModification) {
 				mockEC2.EXPECT().DescribeVolumesModifications(gomock.Any(), gomock.Any()).Return(nil, expErr).Times(1)
 			},
-			expErr: fmt.Errorf("generic EC2 API error"),
+			expErr: genericEc2ApiError,
 		},
 		{
 			name:      "fail: invalid request",
@@ -1581,6 +1585,7 @@ func TestAttachDisk(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			mockCtrl := gomock.NewController(t)
 			mockEC2 := NewMockEC2API(mockCtrl)
 			c := newCloud(mockEC2)
@@ -1670,6 +1675,7 @@ func TestDetachDisk(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			mockCtrl := gomock.NewController(t)
 			mockEC2 := NewMockEC2API(mockCtrl)
 			c := newCloud(mockEC2)
@@ -1725,6 +1731,7 @@ func TestGetDiskByName(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			mockCtrl := gomock.NewController(t)
 			mockEC2 := NewMockEC2API(mockCtrl)
 			c := newCloud(mockEC2)
@@ -1832,6 +1839,7 @@ func TestGetDiskByID(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			mockCtrl := gomock.NewController(t)
 			mockEC2 := NewMockEC2API(mockCtrl)
 			c := newCloud(mockEC2)
@@ -1913,6 +1921,7 @@ func TestCreateSnapshot(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			mockCtrl := gomock.NewController(t)
 			mockEC2 := NewMockEC2API(mockCtrl)
 			c := newCloud(mockEC2)
@@ -2030,6 +2039,7 @@ func TestEnableFastSnapshotRestores(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			mockCtrl := gomock.NewController(t)
 			mockEC2 := NewMockEC2API(mockCtrl)
 			c := newCloud(mockEC2)
@@ -2093,6 +2103,7 @@ func TestAvailabilityZones(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			mockCtrl := gomock.NewController(t)
 			mockEC2 := NewMockEC2API(mockCtrl)
 			c := newCloud(mockEC2)
@@ -2147,6 +2158,7 @@ func TestDeleteSnapshot(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			mockCtrl := gomock.NewController(t)
 			mockEC2 := NewMockEC2API(mockCtrl)
 			c := newCloud(mockEC2)
@@ -2436,6 +2448,7 @@ func TestResizeOrModifyDisk(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			mockCtrl := gomock.NewController(t)
 			mockEC2 := NewMockEC2API(mockCtrl)
 			c := newCloud(mockEC2)
@@ -2560,7 +2573,7 @@ func TestModifyTags(t *testing.T) {
 			name:         "fail: EC2 API generic error TagsToAdd",
 			volumeID:     "mod-tag-test-name",
 			negativeCase: true,
-			expErr:       fmt.Errorf("Generic EC2 API error"),
+			expErr:       genericEc2ApiError,
 			modifyTagsOptions: ModifyTagsOptions{
 				TagsToAdd:    validTagsToAddInput,
 				TagsToDelete: emptyTagsToDeleteInput,
@@ -2570,7 +2583,7 @@ func TestModifyTags(t *testing.T) {
 			name:         "fail: EC2 API generic error TagsToDelete",
 			volumeID:     "mod-tag-test-name",
 			negativeCase: true,
-			expErr:       fmt.Errorf("Generic EC2 API error"),
+			expErr:       genericEc2ApiError,
 			modifyTagsOptions: ModifyTagsOptions{
 				TagsToAdd:    emptyTagsToAddInput,
 				TagsToDelete: validTagsToDeleteInput,
@@ -2580,6 +2593,7 @@ func TestModifyTags(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			mockCtrl := gomock.NewController(t)
 			mockEC2 := NewMockEC2API(mockCtrl)
 			c := newCloud(mockEC2)
@@ -2652,6 +2666,7 @@ func TestGetSnapshotByName(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			mockCtrl := gomock.NewController(t)
 			mockEC2 := NewMockEC2API(mockCtrl)
 			c := newCloud(mockEC2)
@@ -2739,6 +2754,7 @@ func TestGetSnapshotByID(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			mockCtrl := gomock.NewController(t)
 			mockEC2 := NewMockEC2API(mockCtrl)
 			c := newCloud(mockEC2)
@@ -3032,6 +3048,7 @@ func TestListSnapshots(t *testing.T) {
 		{
 			name: "fail: no snapshots ErrNotFound",
 			testFunc: func(t *testing.T) {
+				t.Parallel()
 				mockCtl := gomock.NewController(t)
 				defer mockCtl.Finish()
 				mockEC2 := NewMockEC2API(mockCtl)
@@ -3153,6 +3170,7 @@ func TestWaitForAttachmentState(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			mockCtrl := gomock.NewController(t)
 			mockEC2 := NewMockEC2API(mockCtrl)
 			c := newCloud(mockEC2)
