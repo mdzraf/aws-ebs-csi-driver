@@ -154,6 +154,7 @@ spec:
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: {{ .otelExporterEndpoint }}
             {{- end }}
+            #ADD HERE
           {{- with .Values.controller.envFrom }}
           envFrom:
             {{- . | toYaml | nindent 12 }}
