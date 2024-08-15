@@ -154,7 +154,10 @@ spec:
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: {{ .otelExporterEndpoint }}
             {{- end }}
-            #ADD HERE
+            {{- if .Values.useFipsEndpoint}}
+            - name: AWS_USE_FIPS_ENDPOINT
+              value: "true"
+            {{- end }}
           {{- with .Values.controller.envFrom }}
           envFrom:
             {{- . | toYaml | nindent 12 }}

@@ -178,7 +178,6 @@ awsAccessSecret:
   name: aws-secret
   keyId: key_id
   accessKey: access_key
-  #--set controller.sdkDebugLog=true
 controller:
   batching: true
   volumeModificationFeature:
@@ -487,5 +486,4 @@ helmTester:
   enabled: true
   # Supply a custom image to the ebs-csi-driver-test pod in helm-tester.yaml
   image: "gcr.io/k8s-staging-test-infra/kubekins-e2e:v20240705-131cd74733-master"
-
-# ADD HERE FOR FIPS PARAM
+useFipsEndpoint: false
