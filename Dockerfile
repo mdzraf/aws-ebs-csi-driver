@@ -25,7 +25,19 @@ COPY . .
 ARG TARGETOS
 ARG TARGETARCH
 ARG VERSION
-RUN --mount=type=cache,target=/gomodcache --mount=type=cache,target=/gocache OS=$TARGETOS ARCH=$TARGETARCH make
+ARG FIPSBUILD
+#RUN --mount=type=cache,target=/gomodcache --mount=type=cache,target=/gocache OS=$TARGETOS ARCH=$TARGETARCH make
+
+#Just build FIPS for AMD64
+RUN --mount=type=cache,target=/gomodcache --mount=type=cache,target=/gocache if [ "$FIPSBUILD" = "true" ]; then echo "Building with BoringCrypto enabled"; export GOEXPERIMENT=boringcrypto; fi && OS=$TARGETOS ARCH=$TARGETARCH make
+
+
+
+#TEST ONLY
+#FROM public.ecr.aws/amazonlinux/amazonlinux:2023 AS linux-al2023
+#COPY --from=builder /go/src/github.com/kubernetes-sigs/aws-ebs-csi-driver/bin/aws-ebs-csi-driver /bin/aws-ebs-csi-driver
+#ENTRYPOINT ["/bin/aws-ebs-csi-driver"]
+
 
 FROM public.ecr.aws/eks-distro-build-tooling/eks-distro-minimal-base-csi-ebs:latest-al23 AS linux-al2023
 COPY --from=builder /go/src/github.com/kubernetes-sigs/aws-ebs-csi-driver/bin/aws-ebs-csi-driver /bin/aws-ebs-csi-driver

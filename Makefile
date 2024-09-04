@@ -192,7 +192,11 @@ update-sidecar-dependencies: update-truth-sidecars generate-sidecar-tags update/
 all-push: all-image-registry push-manifest
 
 .PHONY: all-push-with-a1compat
-all-push-with-a1compat: sub-image-linux-arm64-al2 all-image-registry push-manifest
+all-push-with-a1compat: sub-image-linux-arm64-al2 all-image-registry push-manifest all-push-with-fips
+
+.PHONY: all-push-with-fips
+all-push-with-fips:
+	$(MAKE) FIPSBUILD=true all-image-registry push-manifest
 
 test-e2e-%:
 	./hack/prow-e2e.sh test-e2e-$*
@@ -224,6 +228,7 @@ image:
 		-t=$(IMAGE):$(TAG)-$(OS)-$(ARCH)-$(OSVERSION) \
 		--build-arg=GOPROXY=$(GOPROXY) \
 		--build-arg=VERSION=$(VERSION) \
+		$(if $(FIPSBUILD),--build-arg FIPSBUILD=true) \
 		`./hack/provenance.sh` \
 		.
 
