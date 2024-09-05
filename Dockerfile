@@ -15,6 +15,7 @@
 # See
 # https://docs.docker.com/engine/reference/builder/#automatic-platform-args-in-the-global-scope
 # for info on BUILDPLATFORM, TARGETOS, TARGETARCH, etc.
+
 FROM --platform=$BUILDPLATFORM golang:1.22 AS builder
 WORKDIR /go/src/github.com/kubernetes-sigs/aws-ebs-csi-driver
 RUN go env -w GOCACHE=/gocache GOMODCACHE=/gomodcache
@@ -26,18 +27,13 @@ ARG TARGETOS
 ARG TARGETARCH
 ARG VERSION
 ARG FIPSBUILD
-#RUN --mount=type=cache,target=/gomodcache --mount=type=cache,target=/gocache OS=$TARGETOS ARCH=$TARGETARCH make
 
-#Just build FIPS for AMD64
-RUN --mount=type=cache,target=/gomodcache --mount=type=cache,target=/gocache if [ "$FIPSBUILD" = "true" ]; then echo "Building with BoringCrypto enabled"; export GOEXPERIMENT=boringcrypto; fi && OS=$TARGETOS ARCH=$TARGETARCH make
-
-
-
-#TEST ONLY
-#FROM public.ecr.aws/amazonlinux/amazonlinux:2023 AS linux-al2023
-#COPY --from=builder /go/src/github.com/kubernetes-sigs/aws-ebs-csi-driver/bin/aws-ebs-csi-driver /bin/aws-ebs-csi-driver
-#ENTRYPOINT ["/bin/aws-ebs-csi-driver"]
-
+RUN --mount=type=cache,target=/gomodcache --mount=type=cache,target=/gocache \
+    if [ "$FIPSBUILD" = "true" ]; then \
+        echo "Building with BoringCrypto enabled"; \
+        export GOEXPERIMENT=boringcrypto; \
+    fi && \
+    OS=$TARGETOS ARCH=$TARGETARCH make
 
 FROM public.ecr.aws/eks-distro-build-tooling/eks-distro-minimal-base-csi-ebs:latest-al23 AS linux-al2023
 COPY --from=builder /go/src/github.com/kubernetes-sigs/aws-ebs-csi-driver/bin/aws-ebs-csi-driver /bin/aws-ebs-csi-driver
@@ -56,3 +52,7 @@ FROM public.ecr.aws/eks-distro-build-tooling/eks-distro-windows-base:ltsc2022 AS
 COPY --from=builder /go/src/github.com/kubernetes-sigs/aws-ebs-csi-driver/bin/aws-ebs-csi-driver.exe /aws-ebs-csi-driver.exe
 ENV PATH="C:\\Windows\\System32\\WindowsPowerShell\\v1.0;${PATH}"
 ENTRYPOINT ["/aws-ebs-csi-driver.exe"]
+
+FROM public.ecr.aws/eks-distro-build-tooling/eks-distro-minimal-base-csi-ebs:latest-al23 AS linux-al2023-fips
+COPY --from=builder /go/src/github.com/kubernetes-sigs/aws-ebs-csi-driver/bin/aws-ebs-csi-driver /bin/aws-ebs-csi-driver
+ENTRYPOINT ["/bin/aws-ebs-csi-driver"]

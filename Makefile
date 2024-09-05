@@ -192,11 +192,11 @@ update-sidecar-dependencies: update-truth-sidecars generate-sidecar-tags update/
 all-push: all-image-registry push-manifest
 
 .PHONY: all-push-with-a1compat
-all-push-with-a1compat: sub-image-linux-arm64-al2 all-image-registry push-manifest all-push-with-fips
+all-push-with-a1compat: sub-image-linux-arm64-al2 all-image-registry push-manifest
 
 .PHONY: all-push-with-fips
 all-push-with-fips:
-	$(MAKE) FIPSBUILD=true all-image-registry push-manifest
+	$(MAKE) FIPSBUILD=true push-manifest
 
 test-e2e-%:
 	./hack/prow-e2e.sh test-e2e-$*
@@ -225,12 +225,26 @@ image:
 		--progress=plain \
 		--target=$(OS)-$(OSVERSION) \
 		--output=type=registry \
-		-t=$(IMAGE):$(TAG)-$(OS)-$(ARCH)-$(OSVERSION) \
-		--build-arg=GOPROXY=$(GOPROXY) \
-		--build-arg=VERSION=$(VERSION) \
-		$(if $(FIPSBUILD),--build-arg FIPSBUILD=true) \
+		-t $(IMAGE):$(TAG)-$(OS)-$(ARCH)-$(OSVERSION) \
+		--build-arg GOPROXY=$(GOPROXY) \
+		--build-arg VERSION=$(VERSION) \
 		`./hack/provenance.sh` \
 		.
+
+	@if [ "$(OS)" = "linux" ]; then \
+		docker buildx build \
+		--platform=$(OS)/$(ARCH) \
+		--progress=plain \
+		--target=$(OS)-$(OSVERSION) \
+		--output=type=registry \
+		-t $(IMAGE):$(TAG)-$(OS)-$(ARCH)-$(OSVERSION)-fips \
+		--build-arg GOPROXY=$(GOPROXY) \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg FIPSBUILD=true \
+		-f Dockerfile \
+		`./hack/provenance.sh` \
+		.; \
+	fi
 
 .PHONY: create-manifest
 create-manifest: all-image-registry
