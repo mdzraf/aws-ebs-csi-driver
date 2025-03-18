@@ -70,6 +70,7 @@ func InitializeRecorder(deprecatedMetrics bool) *metricRecorder {
 			metrics:  make(map[string]interface{}),
 		}
 		r.initializeAPIMetrics(deprecatedMetrics)
+		r.registerAPIMetrics()
 	})
 	return r
 }
@@ -226,4 +227,13 @@ func (m *metricRecorder) initializeAPIMetrics(deprecatedMetrics bool) {
 			labelNames,
 		)
 	}
+}
+
+func (m *metricRecorder) registerAPIMetrics() {
+	//Register API Throttles which is a counter
+	m.registerCounterVec(APIRequestThrottles, "This is a registered Throttles metric Testing", []string{"Throttle"})
+	m.registerCounterVec(APIRequestErrors, "This is a registered Errors metric Testing", []string{"Errors"})
+	// if counter, ok := m.metrics[APIRequestThrottles].(*prometheus.CounterVec); ok {
+	// 	counter.WithLabelValues("Test")
+	// }
 }
