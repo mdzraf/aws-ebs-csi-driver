@@ -20,9 +20,9 @@ sidecars:
   provisioner:
     env: []
     image:
-      pullPolicy: IfNotPresent
-      repository: public.ecr.aws/eks-distro/kubernetes-csi/external-provisioner
-      tag: "v5.2.0-eks-1-33-3"
+      pullPolicy: Always
+      repository: 872515288843.dkr.ecr.us-west-2.amazonaws.com/csi-provisioner
+      tag: "canary"
     logLevel: 2
     # Additional parameters provided by external-provisioner.
     additionalArgs: []
@@ -104,9 +104,9 @@ sidecars:
   resizer:
     env: []
     image:
-      pullPolicy: IfNotPresent
-      repository: public.ecr.aws/eks-distro/kubernetes-csi/external-resizer
-      tag: "v1.13.2-eks-1-33-3"
+      pullPolicy: Always
+      repository: 872515288843.dkr.ecr.us-west-2.amazonaws.com/csi-resizer
+      tag: "canary"
     # Tune leader lease election for csi-resizer.
     # Leader election is on by default.
     leaderElection:
@@ -263,7 +263,7 @@ controller:
   # ---
   # region: us-east-1
   region:
-  replicaCount: 2
+  replicaCount: 1
   revisionHistoryLimit: 10
   socketDirVolume:
     emptyDir: {}

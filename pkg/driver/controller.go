@@ -344,6 +344,8 @@ func (d *ControllerService) CreateVolume(ctx context.Context, req *csi.CreateVol
 			errCode = codes.NotFound
 		case errors.Is(err, cloud.ErrIdempotentParameterMismatch), errors.Is(err, cloud.ErrAlreadyExists):
 			errCode = codes.AlreadyExists
+		case errors.Is(err, cloud.ErrInvalidArgument):
+			errCode = codes.InvalidArgument
 		default:
 			errCode = codes.Internal
 		}

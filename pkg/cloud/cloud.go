@@ -664,6 +664,9 @@ func (c *cloud) CreateDisk(ctx context.Context, volumeName string, diskOptions *
 			c.latestClientTokens.Set(volumeName, &nextTokenNumber)
 			return nil, ErrIdempotentParameterMismatch
 		}
+		if isAWSErrorInvalidParameter(err) {
+			return nil, fmt.Errorf("%w: %w", ErrInvalidArgument, err)
+		}
 		return nil, fmt.Errorf("could not create volume in EC2: %w", err)
 	}
 
