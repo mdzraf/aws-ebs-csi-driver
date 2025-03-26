@@ -19,7 +19,7 @@ metadata:
   name: io2-class
 driverName: ebs.csi.aws.com
 parameters:
-  type: io2
+  type: gp4
   iops: "3000"
   tagSpecification_1: "location=Seattle"
   tagSpecification_2: "cost-center="
