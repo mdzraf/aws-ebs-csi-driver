@@ -20,3 +20,6 @@ provisioner: ebs.csi.aws.com
 volumeBindingMode: WaitForFirstConsumer
 parameters:
   type: gp4
+
+# kubectl delete -f manifests/storageclass.yaml
+# kubectl apply -f manifests/storageclass.yaml
