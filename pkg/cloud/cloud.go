@@ -565,7 +565,7 @@ func (c *cloud) CreateDisk(ctx context.Context, volumeName string, diskOptions *
 		maxIopsPerGb = gp3MaxIOPSPerGB
 		throughput = diskOptions.Throughput
 	default:
-		return nil, fmt.Errorf("invalid AWS VolumeType %q", diskOptions.VolumeType)
+		return nil, fmt.Errorf("%w: invalid AWS VolumeType %q", ErrInvalidArgument, diskOptions.VolumeType)
 	}
 
 	if diskOptions.MultiAttachEnabled && createType != VolumeTypeIO2 {
@@ -653,6 +653,11 @@ func (c *cloud) CreateDisk(ctx context.Context, volumeName string, diskOptions *
 		o.Retryer = c.rm.createVolumeRetryer
 	})
 	if err != nil {
+		klog.InfoS("IN CLOUD", "err", err)
+		if isAWSErrorInvalidParameter(err) {
+			klog.InfoS("IN CLOUD WENT TO INVALID PARAM")
+			return nil, fmt.Errorf("%w: %w", ErrInvalidArgument, err)
+		}
 		if isAWSErrorSnapshotNotFound(err) {
 			return nil, ErrNotFound
 		}
@@ -663,9 +668,6 @@ func (c *cloud) CreateDisk(ctx context.Context, volumeName string, diskOptions *
 			}
 			c.latestClientTokens.Set(volumeName, &nextTokenNumber)
 			return nil, ErrIdempotentParameterMismatch
-		}
-		if isAWSErrorInvalidParameter(err) {
-			return nil, fmt.Errorf("%w: %w", ErrInvalidArgument, err)
 		}
 		return nil, fmt.Errorf("could not create volume in EC2: %w", err)
 	}
