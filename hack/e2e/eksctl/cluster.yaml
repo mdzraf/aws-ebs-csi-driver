@@ -30,7 +30,11 @@ iam:
         ebsCSIController: true
 managedNodeGroups:
   - name: ng-linux
+{{- if eq .Env.BOTTLEROCKET "true" }}
+    amiFamily: Bottlerocket 
+{{- else}}
     amiFamily: AmazonLinux2023
+{{- end}}
     desiredCapacity: 3
     # Test against no-IMDS environment to test k8s metadata
     # and IRSA/Pod Identity support

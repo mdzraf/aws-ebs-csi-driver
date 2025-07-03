@@ -153,6 +153,10 @@ e2e/external-a1-eks: bin/helm bin/kubetest2
 	HELM_EXTRA_FLAGS="--set=a1CompatibilityDaemonSet=true" \
 	./hack/e2e/run.sh
 
+.PHONY: e2e/external-bottlerocket-eks
+e2e/external-bottlerocket-eks: bin/helm bin/kubetest2
+	./hack/e2e/run.sh
+
 .PHONY: e2e/external-fips
 e2e/external-fips: bin/helm bin/kubetest2
 	HELM_EXTRA_FLAGS="--set=fips=true" \

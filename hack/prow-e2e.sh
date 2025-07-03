@@ -64,6 +64,11 @@ test-e2e-external-eks-windows-fips)
   export CLUSTER_TYPE="eksctl"
   export WINDOWS="true"
   ;;
+test-e2e-external-bottlerocket-eks)
+  TEST="external"
+  export CLUSTER_TYPE="eksctl"
+  export BOTTLEROCKET="true"
+  ;;
 test-e2e-external-windows-hostprocess)
   TEST="external-windows-hostprocess"
   export CLUSTER_TYPE="eksctl"
