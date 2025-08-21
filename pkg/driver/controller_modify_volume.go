@@ -151,7 +151,9 @@ func executeModifyVolumeRequest(c cloud.Cloud) func(string, modifyVolumeRequest)
 			if err != nil {
 				switch {
 				case errors.Is(err, cloud.ErrInvalidArgument):
-					return 0, status.Errorf(codes.InvalidArgument, "Could not modify volume (invalid argument) %q: %v", volumeID, err)
+					// Returning Internal error instead of InvaliArgument because at this point any tag modifications have succeeded.
+					// It would not be correct to return an error that is considered infeasible by the resizer if the volume was already modified in any way.
+					return 0, status.Errorf(codes.Internal, "Could not modify volume (invalid argument) %q: %v", volumeID, err)
 				case errors.Is(err, cloud.ErrNotFound):
 					return 0, status.Errorf(codes.NotFound, "Could not modify volume (not found) %q: %v", volumeID, err)
 				case errors.Is(err, cloud.ErrLimitExceeded):
