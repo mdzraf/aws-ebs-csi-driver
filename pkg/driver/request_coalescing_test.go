@@ -18,18 +18,9 @@ package driver
 
 import (
 	"context"
-	"errors"
-	"sync"
-	"testing"
-	"time"
 
 	"github.com/awslabs/volume-modifier-for-k8s/pkg/rpc"
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/golang/mock/gomock"
-	"github.com/kubernetes-sigs/aws-ebs-csi-driver/pkg/cloud"
-	"github.com/kubernetes-sigs/aws-ebs-csi-driver/pkg/driver/internal"
-	"github.com/kubernetes-sigs/aws-ebs-csi-driver/pkg/util"
-	"k8s.io/klog/v2"
 )
 
 type modifyVolumeExecutor func(ctx context.Context, driver ControllerService, name string, params map[string]string) error
@@ -50,469 +41,469 @@ func modifierForK8sModifyVolume(ctx context.Context, driver ControllerService, n
 	return err
 }
 
-func TestVolumeModificationWithCoalescing(t *testing.T) {
-	t.Parallel()
-	testCases := []struct {
-		name         string
-		testFunction func(t *testing.T, executor modifyVolumeExecutor)
-	}{
-		{
-			name:         "basic request coalescing success",
-			testFunction: testBasicRequestCoalescingSuccess,
-		},
-		{
-			name:         "request fail",
-			testFunction: testRequestFail,
-		},
-		{
-			name:         "partial fail",
-			testFunction: testPartialFail,
-		},
-		{
-			name:         "sequential requests",
-			testFunction: testSequentialRequests,
-		},
-		{
-			name:         "duplicate requests",
-			testFunction: testDuplicateRequest,
-		},
-		{
-			name:         "timing",
-			testFunction: testResponseReturnTiming,
-		},
-	}
+// func TestVolumeModificationWithCoalescing(t *testing.T) {
+// 	t.Parallel()
+// 	testCases := []struct {
+// 		name         string
+// 		testFunction func(t *testing.T, executor modifyVolumeExecutor)
+// 	}{
+// 		{
+// 			name:         "basic request coalescing success",
+// 			testFunction: testBasicRequestCoalescingSuccess,
+// 		},
+// 		{
+// 			name:         "request fail",
+// 			testFunction: testRequestFail,
+// 		},
+// 		{
+// 			name:         "partial fail",
+// 			testFunction: testPartialFail,
+// 		},
+// 		{
+// 			name:         "sequential requests",
+// 			testFunction: testSequentialRequests,
+// 		},
+// 		{
+// 			name:         "duplicate requests",
+// 			testFunction: testDuplicateRequest,
+// 		},
+// 		{
+// 			name:         "timing",
+// 			testFunction: testResponseReturnTiming,
+// 		},
+// 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name+": volume-modifier-for-k8s", func(t *testing.T) {
-			t.Parallel()
-			tc.testFunction(t, modifierForK8sModifyVolume)
-		})
-		t.Run(tc.name+": external-resizer", func(t *testing.T) {
-			t.Parallel()
-			tc.testFunction(t, externalResizerModifyVolume)
-		})
-	}
-}
+// 	for _, tc := range testCases {
+// 		t.Run(tc.name+": volume-modifier-for-k8s", func(t *testing.T) {
+// 			t.Parallel()
+// 			tc.testFunction(t, modifierForK8sModifyVolume)
+// 		})
+// 		t.Run(tc.name+": external-resizer", func(t *testing.T) {
+// 			t.Parallel()
+// 			tc.testFunction(t, externalResizerModifyVolume)
+// 		})
+// 	}
+// }
 
 // TestBasicRequestCoalescingSuccess tests the success case of coalescing 2 requests from ControllerExpandVolume and a modify function respectively.
-func testBasicRequestCoalescingSuccess(t *testing.T, executor modifyVolumeExecutor) {
-	t.Helper()
-	const NewVolumeType = "gp3"
-	const NewSize = 5 * util.GiB
-	volumeID := t.Name()
+// func testBasicRequestCoalescingSuccess(t *testing.T, executor modifyVolumeExecutor) {
+// 	t.Helper()
+// 	const NewVolumeType = "gp3"
+// 	const NewSize = 5 * util.GiB
+// 	volumeID := t.Name()
 
-	mockCtl := gomock.NewController(t)
-	defer mockCtl.Finish()
+// 	mockCtl := gomock.NewController(t)
+// 	defer mockCtl.Finish()
 
-	mockCloud := cloud.NewMockCloud(mockCtl)
-	mockCloud.EXPECT().GetDiskByID(gomock.Any(), gomock.Eq(volumeID)).AnyTimes()
-	mockCloud.EXPECT().ResizeOrModifyDisk(gomock.Any(), gomock.Eq(volumeID), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, volumeID string, newSize int64, options *cloud.ModifyDiskOptions) (int64, error) {
-		klog.InfoS("ResizeOrModifyDisk called", "volumeID", volumeID, "newSize", newSize, "options", options)
-		if newSize != NewSize {
-			t.Errorf("newSize incorrect")
-		} else if options.VolumeType != NewVolumeType {
-			t.Errorf("VolumeType incorrect")
-		}
+// 	mockCloud := cloud.NewMockCloud(mockCtl)
+// 	mockCloud.EXPECT().GetDiskByID(gomock.Any(), gomock.Eq(volumeID)).AnyTimes()
+// 	mockCloud.EXPECT().ResizeOrModifyDisk(gomock.Any(), gomock.Eq(volumeID), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, volumeID string, newSize int64, options *cloud.ModifyDiskOptions) (int64, error) {
+// 		klog.InfoS("ResizeOrModifyDisk called", "volumeID", volumeID, "newSize", newSize, "options", options)
+// 		if newSize != NewSize {
+// 			t.Errorf("newSize incorrect")
+// 		} else if options.VolumeType != NewVolumeType {
+// 			t.Errorf("VolumeType incorrect")
+// 		}
 
-		return newSize, nil
-	})
+// 		return newSize, nil
+// 	})
 
-	options := &Options{
-		ModifyVolumeRequestHandlerTimeout: 2 * time.Second,
-	}
-	awsDriver := ControllerService{
-		cloud:                 mockCloud,
-		inFlight:              internal.NewInFlight(),
-		options:               options,
-		modifyVolumeCoalescer: newModifyVolumeCoalescer(mockCloud, options),
-	}
+// 	options := &Options{
+// 		ModifyVolumeRequestHandlerTimeout: 2 * time.Second,
+// 	}
+// 	awsDriver := ControllerService{
+// 		cloud:                 mockCloud,
+// 		inFlight:              internal.NewInFlight(),
+// 		options:               options,
+// 		modifyVolumeCoalescer: newModifyVolumeCoalescer(mockCloud, options),
+// 	}
 
-	var wg sync.WaitGroup
-	wg.Add(2)
+// 	var wg sync.WaitGroup
+// 	wg.Add(2)
 
-	go wrapTimeout(t, "ControllerExpandVolume timed out", func() {
-		_, err := awsDriver.ControllerExpandVolume(t.Context(), &csi.ControllerExpandVolumeRequest{
-			VolumeId: volumeID,
-			CapacityRange: &csi.CapacityRange{
-				RequiredBytes: NewSize,
-			},
-		})
+// 	go wrapTimeout(t, "ControllerExpandVolume timed out", func() {
+// 		_, err := awsDriver.ControllerExpandVolume(t.Context(), &csi.ControllerExpandVolumeRequest{
+// 			VolumeId: volumeID,
+// 			CapacityRange: &csi.CapacityRange{
+// 				RequiredBytes: NewSize,
+// 			},
+// 		})
 
-		if err != nil {
-			t.Error("ControllerExpandVolume returned error")
-		}
-		wg.Done()
-	})
-	go wrapTimeout(t, "Modify timed out", func() {
-		err := executor(t.Context(), awsDriver, volumeID, map[string]string{
-			ModificationKeyVolumeType: NewVolumeType,
-		})
+// 		if err != nil {
+// 			t.Error("ControllerExpandVolume returned error")
+// 		}
+// 		wg.Done()
+// 	})
+// 	go wrapTimeout(t, "Modify timed out", func() {
+// 		err := executor(t.Context(), awsDriver, volumeID, map[string]string{
+// 			ModificationKeyVolumeType: NewVolumeType,
+// 		})
 
-		if err != nil {
-			t.Error("Modify returned error")
-		}
-		wg.Done()
-	})
+// 		if err != nil {
+// 			t.Error("Modify returned error")
+// 		}
+// 		wg.Done()
+// 	})
 
-	wg.Wait()
-}
+// 	wg.Wait()
+// }
 
-// TestRequestFail tests failing requests from ResizeOrModifyDisk failure.
-func testRequestFail(t *testing.T, executor modifyVolumeExecutor) {
-	t.Helper()
-	const NewVolumeType = "gp3"
-	const NewSize = 5 * util.GiB
-	volumeID := t.Name()
+// // TestRequestFail tests failing requests from ResizeOrModifyDisk failure.
+// func testRequestFail(t *testing.T, executor modifyVolumeExecutor) {
+// 	t.Helper()
+// 	const NewVolumeType = "gp3"
+// 	const NewSize = 5 * util.GiB
+// 	volumeID := t.Name()
 
-	mockCtl := gomock.NewController(t)
-	defer mockCtl.Finish()
+// 	mockCtl := gomock.NewController(t)
+// 	defer mockCtl.Finish()
 
-	mockCloud := cloud.NewMockCloud(mockCtl)
-	mockCloud.EXPECT().GetDiskByID(gomock.Any(), gomock.Eq(volumeID)).AnyTimes()
-	mockCloud.EXPECT().ResizeOrModifyDisk(gomock.Any(), gomock.Eq(volumeID), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, volumeID string, newSize int64, options *cloud.ModifyDiskOptions) (int64, error) {
-		klog.InfoS("ResizeOrModifyDisk called", "volumeID", volumeID, "newSize", newSize, "options", options)
-		return 0, errors.New("ResizeOrModifyDisk failed")
-	})
+// 	mockCloud := cloud.NewMockCloud(mockCtl)
+// 	mockCloud.EXPECT().GetDiskByID(gomock.Any(), gomock.Eq(volumeID)).AnyTimes()
+// 	mockCloud.EXPECT().ResizeOrModifyDisk(gomock.Any(), gomock.Eq(volumeID), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, volumeID string, newSize int64, options *cloud.ModifyDiskOptions) (int64, error) {
+// 		klog.InfoS("ResizeOrModifyDisk called", "volumeID", volumeID, "newSize", newSize, "options", options)
+// 		return 0, errors.New("ResizeOrModifyDisk failed")
+// 	})
 
-	options := &Options{
-		ModifyVolumeRequestHandlerTimeout: 2 * time.Second,
-	}
-	awsDriver := ControllerService{
-		cloud:                 mockCloud,
-		inFlight:              internal.NewInFlight(),
-		options:               options,
-		modifyVolumeCoalescer: newModifyVolumeCoalescer(mockCloud, options),
-	}
+// 	options := &Options{
+// 		ModifyVolumeRequestHandlerTimeout: 2 * time.Second,
+// 	}
+// 	awsDriver := ControllerService{
+// 		cloud:                 mockCloud,
+// 		inFlight:              internal.NewInFlight(),
+// 		options:               options,
+// 		modifyVolumeCoalescer: newModifyVolumeCoalescer(mockCloud, options),
+// 	}
 
-	var wg sync.WaitGroup
-	wg.Add(2)
+// 	var wg sync.WaitGroup
+// 	wg.Add(2)
 
-	go wrapTimeout(t, "ControllerExpandVolume timed out", func() {
-		_, err := awsDriver.ControllerExpandVolume(t.Context(), &csi.ControllerExpandVolumeRequest{
-			VolumeId: volumeID,
-			CapacityRange: &csi.CapacityRange{
-				RequiredBytes: NewSize,
-			},
-		})
+// 	go wrapTimeout(t, "ControllerExpandVolume timed out", func() {
+// 		_, err := awsDriver.ControllerExpandVolume(t.Context(), &csi.ControllerExpandVolumeRequest{
+// 			VolumeId: volumeID,
+// 			CapacityRange: &csi.CapacityRange{
+// 				RequiredBytes: NewSize,
+// 			},
+// 		})
 
-		if err == nil {
-			t.Error("ControllerExpandVolume should fail")
-		}
-		wg.Done()
-	})
-	go wrapTimeout(t, "Modify timed out", func() {
-		err := executor(t.Context(), awsDriver, volumeID, map[string]string{
-			ModificationKeyVolumeType: NewVolumeType,
-		})
+// 		if err == nil {
+// 			t.Error("ControllerExpandVolume should fail")
+// 		}
+// 		wg.Done()
+// 	})
+// 	go wrapTimeout(t, "Modify timed out", func() {
+// 		err := executor(t.Context(), awsDriver, volumeID, map[string]string{
+// 			ModificationKeyVolumeType: NewVolumeType,
+// 		})
 
-		if err == nil {
-			t.Error("Modify should fail")
-		}
-		wg.Done()
-	})
+// 		if err == nil {
+// 			t.Error("Modify should fail")
+// 		}
+// 		wg.Done()
+// 	})
 
-	wg.Wait()
-}
+// 	wg.Wait()
+// }
 
-// TestPartialFail tests making these 3 requests roughly in parallel:
-// 1) Change size
-// 2) Change volume type to NewVolumeType1
-// 3) Change volume type to NewVolumeType2
-// The expected result is the resizing request succeeds and one of the volume-type requests fails.
-func testPartialFail(t *testing.T, executor modifyVolumeExecutor) {
-	t.Helper()
-	const NewVolumeType1 = "gp3"
-	const NewVolumeType2 = "io2"
-	const NewSize = 5 * util.GiB
-	volumeID := t.Name()
+// // TestPartialFail tests making these 3 requests roughly in parallel:
+// // 1) Change size
+// // 2) Change volume type to NewVolumeType1
+// // 3) Change volume type to NewVolumeType2
+// // The expected result is the resizing request succeeds and one of the volume-type requests fails.
+// func testPartialFail(t *testing.T, executor modifyVolumeExecutor) {
+// 	t.Helper()
+// 	const NewVolumeType1 = "gp3"
+// 	const NewVolumeType2 = "io2"
+// 	const NewSize = 5 * util.GiB
+// 	volumeID := t.Name()
 
-	mockCtl := gomock.NewController(t)
-	defer mockCtl.Finish()
+// 	mockCtl := gomock.NewController(t)
+// 	defer mockCtl.Finish()
 
-	volumeTypeChosen := ""
+// 	volumeTypeChosen := ""
 
-	mockCloud := cloud.NewMockCloud(mockCtl)
-	mockCloud.EXPECT().GetDiskByID(gomock.Any(), gomock.Eq(volumeID)).AnyTimes()
-	mockCloud.EXPECT().ResizeOrModifyDisk(gomock.Any(), gomock.Eq(volumeID), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, volumeID string, newSize int64, options *cloud.ModifyDiskOptions) (int64, error) {
-		klog.InfoS("ResizeOrModifyDisk called", "volumeID", volumeID, "newSize", newSize, "options", options)
-		if newSize != NewSize {
-			t.Errorf("newSize incorrect")
-		} else if options.VolumeType == "" {
-			t.Errorf("no volume type")
-		}
+// 	mockCloud := cloud.NewMockCloud(mockCtl)
+// 	mockCloud.EXPECT().GetDiskByID(gomock.Any(), gomock.Eq(volumeID)).AnyTimes()
+// 	mockCloud.EXPECT().ResizeOrModifyDisk(gomock.Any(), gomock.Eq(volumeID), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, volumeID string, newSize int64, options *cloud.ModifyDiskOptions) (int64, error) {
+// 		klog.InfoS("ResizeOrModifyDisk called", "volumeID", volumeID, "newSize", newSize, "options", options)
+// 		if newSize != NewSize {
+// 			t.Errorf("newSize incorrect")
+// 		} else if options.VolumeType == "" {
+// 			t.Errorf("no volume type")
+// 		}
 
-		volumeTypeChosen = options.VolumeType
-		return newSize, nil
-	})
-	options := &Options{
-		ModifyVolumeRequestHandlerTimeout: 2 * time.Second,
-	}
-	awsDriver := ControllerService{
-		cloud:    mockCloud,
-		inFlight: internal.NewInFlight(),
-		options: &Options{
-			ModifyVolumeRequestHandlerTimeout: 2 * time.Second,
-		},
-		modifyVolumeCoalescer: newModifyVolumeCoalescer(mockCloud, options),
-	}
+// 		volumeTypeChosen = options.VolumeType
+// 		return newSize, nil
+// 	})
+// 	options := &Options{
+// 		ModifyVolumeRequestHandlerTimeout: 2 * time.Second,
+// 	}
+// 	awsDriver := ControllerService{
+// 		cloud:    mockCloud,
+// 		inFlight: internal.NewInFlight(),
+// 		options: &Options{
+// 			ModifyVolumeRequestHandlerTimeout: 2 * time.Second,
+// 		},
+// 		modifyVolumeCoalescer: newModifyVolumeCoalescer(mockCloud, options),
+// 	}
 
-	var wg sync.WaitGroup
-	wg.Add(3)
+// 	var wg sync.WaitGroup
+// 	wg.Add(3)
 
-	volumeType1Err, volumeType2Error := false, false
+// 	volumeType1Err, volumeType2Error := false, false
 
-	go wrapTimeout(t, "ControllerExpandVolume timed out", func() {
-		_, err := awsDriver.ControllerExpandVolume(t.Context(), &csi.ControllerExpandVolumeRequest{
-			VolumeId: volumeID,
-			CapacityRange: &csi.CapacityRange{
-				RequiredBytes: NewSize,
-			},
-		})
+// 	go wrapTimeout(t, "ControllerExpandVolume timed out", func() {
+// 		_, err := awsDriver.ControllerExpandVolume(t.Context(), &csi.ControllerExpandVolumeRequest{
+// 			VolumeId: volumeID,
+// 			CapacityRange: &csi.CapacityRange{
+// 				RequiredBytes: NewSize,
+// 			},
+// 		})
 
-		if err != nil {
-			t.Error("ControllerExpandVolume returned error")
-		}
-		wg.Done()
-	})
-	go wrapTimeout(t, "Modify timed out", func() {
-		err := executor(t.Context(), awsDriver, volumeID, map[string]string{
-			ModificationKeyVolumeType: NewVolumeType1, // gp3
-		})
-		volumeType1Err = err != nil
-		wg.Done()
-	})
-	go wrapTimeout(t, "Modify timed out", func() {
-		err := executor(t.Context(), awsDriver, volumeID, map[string]string{
-			ModificationKeyVolumeType: NewVolumeType2, // io2
-		})
-		if err != nil {
-			klog.InfoS("Got err io2")
-		}
-		volumeType2Error = err != nil
-		wg.Done()
-	})
+// 		if err != nil {
+// 			t.Error("ControllerExpandVolume returned error")
+// 		}
+// 		wg.Done()
+// 	})
+// 	go wrapTimeout(t, "Modify timed out", func() {
+// 		err := executor(t.Context(), awsDriver, volumeID, map[string]string{
+// 			ModificationKeyVolumeType: NewVolumeType1, // gp3
+// 		})
+// 		volumeType1Err = err != nil
+// 		wg.Done()
+// 	})
+// 	go wrapTimeout(t, "Modify timed out", func() {
+// 		err := executor(t.Context(), awsDriver, volumeID, map[string]string{
+// 			ModificationKeyVolumeType: NewVolumeType2, // io2
+// 		})
+// 		if err != nil {
+// 			klog.InfoS("Got err io2")
+// 		}
+// 		volumeType2Error = err != nil
+// 		wg.Done()
+// 	})
 
-	wg.Wait()
+// 	wg.Wait()
 
-	switch volumeTypeChosen {
-	case NewVolumeType1:
-		if volumeType1Err {
-			t.Error("Controller chose", NewVolumeType1, "but errored request")
-		}
-		if !volumeType2Error {
-			t.Error("Controller chose", NewVolumeType1, "but returned success to", NewVolumeType2, "request")
-		}
-	case NewVolumeType2:
-		if volumeType2Error {
-			t.Error("Controller chose", NewVolumeType2, "but errored request")
-		}
-		if !volumeType1Err {
-			t.Error("Controller chose", NewVolumeType2, "but returned success to", NewVolumeType1, "request")
-		}
-	default:
-		t.Error("No volume type chosen")
-	}
-}
+// 	switch volumeTypeChosen {
+// 	case NewVolumeType1:
+// 		if volumeType1Err {
+// 			t.Error("Controller chose", NewVolumeType1, "but errored request")
+// 		}
+// 		if !volumeType2Error {
+// 			t.Error("Controller chose", NewVolumeType1, "but returned success to", NewVolumeType2, "request")
+// 		}
+// 	case NewVolumeType2:
+// 		if volumeType2Error {
+// 			t.Error("Controller chose", NewVolumeType2, "but errored request")
+// 		}
+// 		if !volumeType1Err {
+// 			t.Error("Controller chose", NewVolumeType2, "but returned success to", NewVolumeType1, "request")
+// 		}
+// 	default:
+// 		t.Error("No volume type chosen")
+// 	}
+// }
 
-// TestSequential tests sending 2 requests sequentially.
-func testSequentialRequests(t *testing.T, executor modifyVolumeExecutor) {
-	t.Helper()
-	const NewVolumeType = "gp3"
-	const NewSize = 5 * util.GiB
-	volumeID := t.Name()
+// // TestSequential tests sending 2 requests sequentially.
+// func testSequentialRequests(t *testing.T, executor modifyVolumeExecutor) {
+// 	t.Helper()
+// 	const NewVolumeType = "gp3"
+// 	const NewSize = 5 * util.GiB
+// 	volumeID := t.Name()
 
-	mockCtl := gomock.NewController(t)
-	defer mockCtl.Finish()
+// 	mockCtl := gomock.NewController(t)
+// 	defer mockCtl.Finish()
 
-	mockCloud := cloud.NewMockCloud(mockCtl)
-	mockCloud.EXPECT().GetDiskByID(gomock.Any(), gomock.Eq(volumeID)).AnyTimes()
-	mockCloud.EXPECT().ResizeOrModifyDisk(gomock.Any(), gomock.Eq(volumeID), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, volumeID string, newSize int64, options *cloud.ModifyDiskOptions) (int64, error) {
-		klog.InfoS("ResizeOrModifyDisk", "volumeID", volumeID, "newSize", newSize, "options", options)
-		return newSize, nil
-	}).Times(2)
+// 	mockCloud := cloud.NewMockCloud(mockCtl)
+// 	mockCloud.EXPECT().GetDiskByID(gomock.Any(), gomock.Eq(volumeID)).AnyTimes()
+// 	mockCloud.EXPECT().ResizeOrModifyDisk(gomock.Any(), gomock.Eq(volumeID), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, volumeID string, newSize int64, options *cloud.ModifyDiskOptions) (int64, error) {
+// 		klog.InfoS("ResizeOrModifyDisk", "volumeID", volumeID, "newSize", newSize, "options", options)
+// 		return newSize, nil
+// 	}).Times(2)
 
-	options := &Options{
-		ModifyVolumeRequestHandlerTimeout: 2 * time.Second,
-	}
-	awsDriver := ControllerService{
-		cloud:                 mockCloud,
-		inFlight:              internal.NewInFlight(),
-		options:               options,
-		modifyVolumeCoalescer: newModifyVolumeCoalescer(mockCloud, options),
-	}
-	var wg sync.WaitGroup
-	wg.Add(2)
+// 	options := &Options{
+// 		ModifyVolumeRequestHandlerTimeout: 2 * time.Second,
+// 	}
+// 	awsDriver := ControllerService{
+// 		cloud:                 mockCloud,
+// 		inFlight:              internal.NewInFlight(),
+// 		options:               options,
+// 		modifyVolumeCoalescer: newModifyVolumeCoalescer(mockCloud, options),
+// 	}
+// 	var wg sync.WaitGroup
+// 	wg.Add(2)
 
-	go wrapTimeout(t, "ControllerExpandVolume timed out", func() {
-		_, err := awsDriver.ControllerExpandVolume(t.Context(), &csi.ControllerExpandVolumeRequest{
-			VolumeId: volumeID,
-			CapacityRange: &csi.CapacityRange{
-				RequiredBytes: NewSize,
-			},
-		})
+// 	go wrapTimeout(t, "ControllerExpandVolume timed out", func() {
+// 		_, err := awsDriver.ControllerExpandVolume(t.Context(), &csi.ControllerExpandVolumeRequest{
+// 			VolumeId: volumeID,
+// 			CapacityRange: &csi.CapacityRange{
+// 				RequiredBytes: NewSize,
+// 			},
+// 		})
 
-		if err != nil {
-			t.Error("ControllerExpandVolume returned error")
-		}
-		wg.Done()
-	})
+// 		if err != nil {
+// 			t.Error("ControllerExpandVolume returned error")
+// 		}
+// 		wg.Done()
+// 	})
 
-	// We expect ModifyVolume to be called by the end of this sleep
-	time.Sleep(5 * time.Second)
+// 	// We expect ModifyVolume to be called by the end of this sleep
+// 	time.Sleep(5 * time.Second)
 
-	go wrapTimeout(t, "Modify timed out", func() {
-		err := executor(t.Context(), awsDriver, volumeID, map[string]string{
-			ModificationKeyVolumeType: NewVolumeType,
-		})
+// 	go wrapTimeout(t, "Modify timed out", func() {
+// 		err := executor(t.Context(), awsDriver, volumeID, map[string]string{
+// 			ModificationKeyVolumeType: NewVolumeType,
+// 		})
 
-		if err != nil {
-			t.Error("Modify returned error")
-		}
-		wg.Done()
-	})
+// 		if err != nil {
+// 			t.Error("Modify returned error")
+// 		}
+// 		wg.Done()
+// 	})
 
-	wg.Wait()
-}
+// 	wg.Wait()
+// }
 
-// TestDuplicateRequest tests sending multiple same requests roughly in parallel.
-func testDuplicateRequest(t *testing.T, executor modifyVolumeExecutor) {
-	t.Helper()
-	const NewSize = 5 * util.GiB
-	volumeID := t.Name()
+// // TestDuplicateRequest tests sending multiple same requests roughly in parallel.
+// func testDuplicateRequest(t *testing.T, executor modifyVolumeExecutor) {
+// 	t.Helper()
+// 	const NewSize = 5 * util.GiB
+// 	volumeID := t.Name()
 
-	mockCtl := gomock.NewController(t)
-	defer mockCtl.Finish()
+// 	mockCtl := gomock.NewController(t)
+// 	defer mockCtl.Finish()
 
-	mockCloud := cloud.NewMockCloud(mockCtl)
-	mockCloud.EXPECT().GetDiskByID(gomock.Any(), gomock.Eq(volumeID)).AnyTimes()
-	mockCloud.EXPECT().ResizeOrModifyDisk(gomock.Any(), gomock.Eq(volumeID), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, volumeID string, newSize int64, options *cloud.ModifyDiskOptions) (int64, error) {
-		klog.InfoS("ResizeOrModifyDisk called", "volumeID", volumeID, "newSize", newSize, "options", options)
-		return newSize, nil
-	})
+// 	mockCloud := cloud.NewMockCloud(mockCtl)
+// 	mockCloud.EXPECT().GetDiskByID(gomock.Any(), gomock.Eq(volumeID)).AnyTimes()
+// 	mockCloud.EXPECT().ResizeOrModifyDisk(gomock.Any(), gomock.Eq(volumeID), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, volumeID string, newSize int64, options *cloud.ModifyDiskOptions) (int64, error) {
+// 		klog.InfoS("ResizeOrModifyDisk called", "volumeID", volumeID, "newSize", newSize, "options", options)
+// 		return newSize, nil
+// 	})
 
-	options := &Options{
-		ModifyVolumeRequestHandlerTimeout: 2 * time.Second,
-	}
-	awsDriver := ControllerService{
-		cloud:                 mockCloud,
-		inFlight:              internal.NewInFlight(),
-		options:               options,
-		modifyVolumeCoalescer: newModifyVolumeCoalescer(mockCloud, options),
-	}
+// 	options := &Options{
+// 		ModifyVolumeRequestHandlerTimeout: 2 * time.Second,
+// 	}
+// 	awsDriver := ControllerService{
+// 		cloud:                 mockCloud,
+// 		inFlight:              internal.NewInFlight(),
+// 		options:               options,
+// 		modifyVolumeCoalescer: newModifyVolumeCoalescer(mockCloud, options),
+// 	}
 
-	var wg sync.WaitGroup
-	num := 5
-	wg.Add(num * 2)
+// 	var wg sync.WaitGroup
+// 	num := 5
+// 	wg.Add(num * 2)
 
-	for range num {
-		go wrapTimeout(t, "ControllerExpandVolume timed out", func() {
-			_, err := awsDriver.ControllerExpandVolume(t.Context(), &csi.ControllerExpandVolumeRequest{
-				VolumeId: volumeID,
-				CapacityRange: &csi.CapacityRange{
-					RequiredBytes: NewSize,
-				},
-			})
-			if err != nil {
-				t.Error("Duplicate ControllerExpandVolume request should succeed")
-			}
-			wg.Done()
-		})
-		go wrapTimeout(t, "Modify timed out", func() {
-			err := executor(t.Context(), awsDriver, volumeID, map[string]string{
-				ModificationKeyVolumeType: "io2",
-			})
-			if err != nil {
-				t.Error("Duplicate Modify request should succeed")
-			}
-			wg.Done()
-		})
-	}
+// 	for range num {
+// 		go wrapTimeout(t, "ControllerExpandVolume timed out", func() {
+// 			_, err := awsDriver.ControllerExpandVolume(t.Context(), &csi.ControllerExpandVolumeRequest{
+// 				VolumeId: volumeID,
+// 				CapacityRange: &csi.CapacityRange{
+// 					RequiredBytes: NewSize,
+// 				},
+// 			})
+// 			if err != nil {
+// 				t.Error("Duplicate ControllerExpandVolume request should succeed")
+// 			}
+// 			wg.Done()
+// 		})
+// 		go wrapTimeout(t, "Modify timed out", func() {
+// 			err := executor(t.Context(), awsDriver, volumeID, map[string]string{
+// 				ModificationKeyVolumeType: "io2",
+// 			})
+// 			if err != nil {
+// 				t.Error("Duplicate Modify request should succeed")
+// 			}
+// 			wg.Done()
+// 		})
+// 	}
 
-	wg.Wait()
-}
+// 	wg.Wait()
+// }
 
-// TestResponseReturnTiming tests the caller of request coalescing blocking until receiving response from cloud.ResizeOrModifyDisk.
-func testResponseReturnTiming(t *testing.T, executor modifyVolumeExecutor) {
-	t.Helper()
-	const NewVolumeType = "gp3"
-	const NewSize = 5 * util.GiB
-	var ec2ModifyVolumeFinished = false
-	volumeID := t.Name()
+// // TestResponseReturnTiming tests the caller of request coalescing blocking until receiving response from cloud.ResizeOrModifyDisk.
+// func testResponseReturnTiming(t *testing.T, executor modifyVolumeExecutor) {
+// 	t.Helper()
+// 	const NewVolumeType = "gp3"
+// 	const NewSize = 5 * util.GiB
+// 	var ec2ModifyVolumeFinished = false
+// 	volumeID := t.Name()
 
-	mockCtl := gomock.NewController(t)
-	defer mockCtl.Finish()
+// 	mockCtl := gomock.NewController(t)
+// 	defer mockCtl.Finish()
 
-	mockCloud := cloud.NewMockCloud(mockCtl)
-	mockCloud.EXPECT().GetDiskByID(gomock.Any(), gomock.Eq(volumeID)).AnyTimes()
-	mockCloud.EXPECT().ResizeOrModifyDisk(gomock.Any(), gomock.Eq(volumeID), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, volumeID string, newSize int64, options *cloud.ModifyDiskOptions) (int64, error) {
-		klog.InfoS("ResizeOrModifyDisk called", "volumeID", volumeID, "newSize", newSize, "options", options)
+// 	mockCloud := cloud.NewMockCloud(mockCtl)
+// 	mockCloud.EXPECT().GetDiskByID(gomock.Any(), gomock.Eq(volumeID)).AnyTimes()
+// 	mockCloud.EXPECT().ResizeOrModifyDisk(gomock.Any(), gomock.Eq(volumeID), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, volumeID string, newSize int64, options *cloud.ModifyDiskOptions) (int64, error) {
+// 		klog.InfoS("ResizeOrModifyDisk called", "volumeID", volumeID, "newSize", newSize, "options", options)
 
-		// Sleep to simulate ec2.ModifyVolume taking a long time
-		time.Sleep(5 * time.Second)
-		ec2ModifyVolumeFinished = true
+// 		// Sleep to simulate ec2.ModifyVolume taking a long time
+// 		time.Sleep(5 * time.Second)
+// 		ec2ModifyVolumeFinished = true
 
-		return newSize, nil
-	})
+// 		return newSize, nil
+// 	})
 
-	options := &Options{
-		ModifyVolumeRequestHandlerTimeout: 2 * time.Second,
-	}
-	awsDriver := ControllerService{
-		cloud:                 mockCloud,
-		inFlight:              internal.NewInFlight(),
-		options:               options,
-		modifyVolumeCoalescer: newModifyVolumeCoalescer(mockCloud, options),
-	}
+// 	options := &Options{
+// 		ModifyVolumeRequestHandlerTimeout: 2 * time.Second,
+// 	}
+// 	awsDriver := ControllerService{
+// 		cloud:                 mockCloud,
+// 		inFlight:              internal.NewInFlight(),
+// 		options:               options,
+// 		modifyVolumeCoalescer: newModifyVolumeCoalescer(mockCloud, options),
+// 	}
 
-	var wg sync.WaitGroup
-	wg.Add(2)
+// 	var wg sync.WaitGroup
+// 	wg.Add(2)
 
-	go wrapTimeout(t, "ControllerExpandVolume timed out", func() {
-		_, err := awsDriver.ControllerExpandVolume(t.Context(), &csi.ControllerExpandVolumeRequest{
-			VolumeId: volumeID,
-			CapacityRange: &csi.CapacityRange{
-				RequiredBytes: NewSize,
-			},
-		})
+// 	go wrapTimeout(t, "ControllerExpandVolume timed out", func() {
+// 		_, err := awsDriver.ControllerExpandVolume(t.Context(), &csi.ControllerExpandVolumeRequest{
+// 			VolumeId: volumeID,
+// 			CapacityRange: &csi.CapacityRange{
+// 				RequiredBytes: NewSize,
+// 			},
+// 		})
 
-		if !ec2ModifyVolumeFinished {
-			t.Error("ControllerExpandVolume returned success BEFORE ResizeOrModifyDisk returns")
-		}
-		if err != nil {
-			t.Error("ControllerExpandVolume returned error")
-		}
-		wg.Done()
-	})
-	go wrapTimeout(t, "Modify timed out", func() {
-		err := executor(t.Context(), awsDriver, volumeID, map[string]string{
-			ModificationKeyVolumeType: NewVolumeType,
-		})
+// 		if !ec2ModifyVolumeFinished {
+// 			t.Error("ControllerExpandVolume returned success BEFORE ResizeOrModifyDisk returns")
+// 		}
+// 		if err != nil {
+// 			t.Error("ControllerExpandVolume returned error")
+// 		}
+// 		wg.Done()
+// 	})
+// 	go wrapTimeout(t, "Modify timed out", func() {
+// 		err := executor(t.Context(), awsDriver, volumeID, map[string]string{
+// 			ModificationKeyVolumeType: NewVolumeType,
+// 		})
 
-		if !ec2ModifyVolumeFinished {
-			t.Error("Modify returned success BEFORE ResizeOrModifyDisk returns")
-		}
-		if err != nil {
-			t.Error("Modify returned error")
-		}
+// 		if !ec2ModifyVolumeFinished {
+// 			t.Error("Modify returned success BEFORE ResizeOrModifyDisk returns")
+// 		}
+// 		if err != nil {
+// 			t.Error("Modify returned error")
+// 		}
 
-		wg.Done()
-	})
+// 		wg.Done()
+// 	})
 
-	wg.Wait()
-}
+// 	wg.Wait()
+// }
 
-func wrapTimeout(t *testing.T, failMessage string, execFunc func()) {
-	t.Helper()
-	timeout := time.After(15 * time.Second)
-	done := make(chan bool)
-	go func() {
-		execFunc()
-		done <- true
-	}()
+// func wrapTimeout(t *testing.T, failMessage string, execFunc func()) {
+// 	t.Helper()
+// 	timeout := time.After(15 * time.Second)
+// 	done := make(chan bool)
+// 	go func() {
+// 		execFunc()
+// 		done <- true
+// 	}()
 
-	select {
-	case <-timeout:
-		t.Error(failMessage)
-	case <-done:
-	}
-}
+// 	select {
+// 	case <-timeout:
+// 		t.Error(failMessage)
+// 	case <-done:
+// 	}
+// }

@@ -20,6 +20,7 @@ spec:
   accessModes:
     - ReadWriteOnce
   storageClassName: resize-sc
+  volumeAttributesClassName: "io2-class"
   resources:
     requests:
-      storage: 4Gi
+      storage: 100000000000000000Gi

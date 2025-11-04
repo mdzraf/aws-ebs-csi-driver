@@ -27,7 +27,7 @@ type Cloud interface {
 	AttachDisk(ctx context.Context, volumeID string, nodeID string) (devicePath string, err error)
 	DetachDisk(ctx context.Context, volumeID string, nodeID string) (err error)
 	ModifyTags(ctx context.Context, volumeID string, tagOptions ModifyTagsOptions) (err error)
-	ResizeOrModifyDisk(ctx context.Context, volumeID string, newSizeBytes int64, options *ModifyDiskOptions) (newSize int32, err error)
+	ResizeOrModifyDisk(ctx context.Context, volumeID string, req *ec2.ModifyVolumeInput, newSizeGiB int32, options *ModifyDiskOptions) (int32, error)
 	WaitForAttachmentState(ctx context.Context, expectedState types.VolumeAttachmentState, volumeID string, expectedInstance string, expectedDevice string, alreadyAssigned bool) (*types.VolumeAttachment, error)
 	IsVolumeInitialized(ctx context.Context, volumeID string) (bool, error)
 	GetDiskByName(ctx context.Context, name string, capacityBytes int64) (disk *Disk, err error)
@@ -41,4 +41,6 @@ type Cloud interface {
 	AvailabilityZones(ctx context.Context) (map[string]struct{}, error)
 	DryRun(ctx context.Context) error
 	GetInstancesPatching(ctx context.Context, nodeIDs []string) ([]*types.Instance, error)
+	ProcessModifyDiskParameters(ctx context.Context, volumeID string, newSizeBytes int64, options *ModifyDiskOptions) (bool, int32, *ec2.ModifyVolumeInput, error)
+	// DryRunModifyVolume(ctx context.Context, req *ec2.ModifyVolumeInput) error
 }

@@ -25,6 +25,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/awslabs/volume-modifier-for-k8s/pkg/rpc"
 	"github.com/kubernetes-sigs/aws-ebs-csi-driver/pkg/cloud"
 	"github.com/kubernetes-sigs/aws-ebs-csi-driver/pkg/coalescer"
@@ -142,13 +144,59 @@ func executeModifyVolumeRequest(c cloud.Cloud) func(string, modifyVolumeRequest)
 	return func(volumeID string, req modifyVolumeRequest) (int32, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		err := executeModifyTagsRequest(volumeID, req, c, ctx)
-		if err != nil {
-			return 0, err
-		}
+
+		var (
+			needsModification            bool
+			volumeSize                   int32
+			modifyVolumeInput            *ec2.ModifyVolumeInput
+			err                          error
+			callResizeOrModifyDisk       bool
+			callExecuteModifyTagsRequest bool
+		)
 
 		if (req.modifyDiskOptions.IOPS != 0) || (req.modifyDiskOptions.Throughput != 0) || (req.modifyDiskOptions.VolumeType != "") || (req.newSize != 0) || (req.modifyDiskOptions.IOPSPerGB != 0) {
-			actualSizeGiB, err := c.ResizeOrModifyDisk(ctx, volumeID, req.newSize, &req.modifyDiskOptions)
+			callResizeOrModifyDisk = true
+			needsModification, volumeSize, modifyVolumeInput, err = c.ProcessModifyDiskParameters(ctx, volumeID, req.newSize, &req.modifyDiskOptions)
+			if err != nil {
+				return 0, err
+			}
+		}
+
+		if len(req.modifyTagsOptions.TagsToAdd) > 0 || len(req.modifyTagsOptions.TagsToDelete) > 0 {
+			callExecuteModifyTagsRequest = true
+		}
+
+		if callResizeOrModifyDisk && callExecuteModifyTagsRequest {
+			if !needsModification {
+				err := executeModifyTagsRequest(volumeID, req, c, ctx)
+				if err != nil {
+					return 0, err
+				}
+				return volumeSize, nil
+			}
+
+			// Only if modification is needed and tags are being modified, do the dryrun
+			dryRunInput := *modifyVolumeInput
+			dryRunInput.DryRun = aws.Bool(true)
+			_, err = c.ResizeOrModifyDisk(ctx, volumeID, &dryRunInput, *dryRunInput.Size, &req.modifyDiskOptions)
+			if err != nil {
+				return 0, status.Errorf(codes.Internal, "Could not modify volume (DryRun failed) %q: %v", volumeID, err)
+			}
+		}
+
+		if callExecuteModifyTagsRequest {
+			err := executeModifyTagsRequest(volumeID, req, c, ctx)
+			if err != nil {
+				return 0, err
+			}
+		}
+
+		if callResizeOrModifyDisk {
+			if !needsModification {
+				return volumeSize, nil
+			}
+			klog.Info("Non-DryRun Resize Call ")
+			actualSizeGiB, err := c.ResizeOrModifyDisk(ctx, volumeID, modifyVolumeInput, *modifyVolumeInput.Size, &req.modifyDiskOptions)
 			if err != nil {
 				switch {
 				case errors.Is(err, cloud.ErrInvalidArgument):

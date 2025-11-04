@@ -3672,7 +3672,23 @@ func TestResizeOrModifyDisk(t *testing.T) {
 				mockEC2.EXPECT().DescribeVolumesModifications(gomock.Any(), gomock.Any(), gomock.Any()).Return(emptyOutput, nil).AnyTimes()
 			}
 
-			newSize, err := c.ResizeOrModifyDisk(ctx, tc.volumeID, util.GiBToBytes(tc.reqSizeGiB), tc.modifyDiskOptions)
+			// First call ProcessModifyDiskParameters to get the ModifyVolumeInput
+			needsModification, volumeSize, modifyReq, err := c.ProcessModifyDiskParameters(ctx, tc.volumeID, util.GiBToBytes(tc.reqSizeGiB), tc.modifyDiskOptions)
+			if err != nil && tc.expErr == nil {
+				t.Fatalf("ProcessModifyDiskParameters failed: %v", err)
+			}
+			if tc.expErr != nil && err != nil {
+				// Expected error case
+				return
+			}
+			if !needsModification {
+				// No modification needed, return the current volume size
+				newSize := volumeSize
+				assert.Equal(t, tc.reqSizeGiB, newSize, "ProcessModifyDiskParameters() returned unexpected capacity")
+				return
+			}
+
+			newSize, err := c.ResizeOrModifyDisk(ctx, tc.volumeID, modifyReq, tc.reqSizeGiB, tc.modifyDiskOptions)
 			switch {
 			case errors.Is(tc.expErr, ErrInvalidArgument):
 				require.ErrorIs(t, err, ErrInvalidArgument, "ResizeOrModifyDisk() should return ErrInvalidArgument")

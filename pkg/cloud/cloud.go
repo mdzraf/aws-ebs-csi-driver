@@ -190,6 +190,9 @@ var (
 
 	// ErrLimitExceeded is returned if a user exceeds a quota.
 	ErrLimitExceeded = errors.New("limit exceeded")
+
+	// ErrDryRunOperation is returned if a DryRun succeeds
+	ErrDryRunOperation = errors.New("dryrun succeeded")
 )
 
 // Set during build time via -ldflags.
@@ -935,95 +938,31 @@ func (c *cloud) ModifyTags(ctx context.Context, volumeID string, tagOptions Modi
 // volume with the parameters in ModifyDiskOptions.
 // The resizing operation is performed only when newSizeBytes != 0.
 // It returns the volume size after this call or an error if the size couldn't be determined or the volume couldn't be modified.
-func (c *cloud) ResizeOrModifyDisk(ctx context.Context, volumeID string, newSizeBytes int64, options *ModifyDiskOptions) (int32, error) {
-	if newSizeBytes != 0 {
-		klog.V(4).InfoS("Received Resize and/or Modify Disk request", "volumeID", volumeID, "newSizeBytes", newSizeBytes, "options", options)
+func (c *cloud) ResizeOrModifyDisk(ctx context.Context, volumeID string, req *ec2.ModifyVolumeInput, newSizeGiB int32, options *ModifyDiskOptions) (int32, error) {
+	if newSizeGiB != 0 {
+		klog.V(4).InfoS("Received Resize and/or Modify Disk request", "volumeID", volumeID, "newSizeGiB", newSizeGiB, "options", options)
 	} else {
 		klog.V(4).InfoS("Received Modify Disk request", "volumeID", volumeID, "options", options)
 	}
 
-	newSizeGiB, err := util.RoundUpGiB(newSizeBytes)
-	if err != nil {
+	if req.DryRun != nil && *req.DryRun {
+		klog.Info("req.Dryrun is set to true")
+		_, err := c.ec2.ModifyVolume(ctx, req, func(o *ec2.Options) {
+			o.APIOptions = nil // Don't add our logging/metrics middleware because we expect DryRunOperation error.
+		})
+		if isAwsErrorDryRunOperation(err) {
+			klog.InfoS("in isAwsErrorDryRunOperation", "error", err)
+			return 0, nil
+		}
+		klog.InfoS("Outside of isAwsErrorDryRunOperation", "error", err)
 		return 0, err
 	}
-	request := &ec2.DescribeVolumesInput{
-		VolumeIds: []string{volumeID},
-	}
-	volume, err := c.getVolume(ctx, request)
-	if err != nil {
-		return 0, err
-	}
 
-	needsModification, volumeSize, err := c.validateVolumeState(ctx, volumeID, newSizeGiB, *volume.Size, options)
-	if err != nil || !needsModification {
-		return volumeSize, err
-	}
-
-	if options.IOPS > 0 && options.IOPSPerGB > 0 {
-		return 0, errors.New("invalid VAC parameter; specify either IOPS or IOPSPerGb, not both")
-	}
-
-	req := &ec2.ModifyVolumeInput{
-		VolumeId: aws.String(volumeID),
-	}
-	if newSizeBytes != 0 {
-		req.Size = aws.Int32(newSizeGiB)
-	}
-	volTypeToUse := volume.VolumeType
-	if options.VolumeType != "" {
-		req.VolumeType = types.VolumeType(options.VolumeType)
-		volTypeToUse = req.VolumeType
-	}
-	if options.Throughput != 0 {
-		req.Throughput = aws.Int32(options.Throughput)
-	}
-
-	var sizeToUse int32
-	if req.Size != nil {
-		sizeToUse = *req.Size
-	} else {
-		sizeToUse = *volume.Size
-	}
-
-	allowAutoIncreaseIsSet, iopsPerGbVal, err := c.checkIfIopsIncreaseOnExpansion(volume.Tags)
-	if err != nil {
-		return 0, err
-	}
-	var iopsForModify int32
-	switch {
-	case options.IOPS != 0:
-		iopsForModify = options.IOPS
-	case options.IOPSPerGB != 0 && (options.AllowIopsIncreaseOnResize || allowAutoIncreaseIsSet):
-		iopsForModify = sizeToUse * options.IOPSPerGB
-	case iopsPerGbVal > 0 && (options.AllowIopsIncreaseOnResize || allowAutoIncreaseIsSet):
-		iopsForModify = sizeToUse * iopsPerGbVal
-	}
-	if iopsForModify != 0 {
-		azParams := getVolumeLimitsParams{}
-
-		if volume.AvailabilityZone != nil {
-			azParams.availabilityZone = *volume.AvailabilityZone
-		}
-		if volume.AvailabilityZoneId != nil {
-			azParams.availabilityZoneId = *volume.AvailabilityZoneId
-		}
-		// EBS doesn't handle empty outpost arn, so we have to include it only when it's non-empty
-		if volume.OutpostArn != nil {
-			azParams.outpostArn = *volume.OutpostArn
-		}
-		iopsLimits := c.getVolumeLimits(ctx, string(volTypeToUse), azParams)
-		req.Iops = aws.Int32(capIOPS(string(volTypeToUse), sizeToUse, iopsForModify, iopsLimits, true))
-		options.IOPS = *req.Iops
-	}
-
-	needsModification, volumeSize, err = c.validateModifyVolume(ctx, volumeID, newSizeGiB, options, *volume)
-	if err != nil || !needsModification {
-		return volumeSize, err
-	}
-
+	klog.Info("req.Dryrun is NOT SET")
 	response, err := c.ec2.ModifyVolume(ctx, req, func(o *ec2.Options) {
 		o.Retryer = c.rm.modifyVolumeRetryer
 	})
+
 	if err != nil {
 		if isAWSErrorInvalidParameter(err) {
 			// Wrap error to preserve original message from AWS as to why this was an invalid argument
@@ -1047,6 +986,7 @@ func (c *cloud) ResizeOrModifyDisk(ctx context.Context, volumeID string, newSize
 	}
 	// Perform one final check on the volume
 	return c.checkDesiredState(ctx, volumeID, newSizeGiB, options)
+
 }
 
 func (c *cloud) DeleteDisk(ctx context.Context, volumeID string) (bool, error) {
@@ -2421,6 +2361,13 @@ func isAWSErrorInvalidParameter(err error) bool {
 	return false
 }
 
+// isAwsErrisAwsErrorDryRunOperationorSnapshotLimitExceeded checks if the error is a DryRunOperation error.
+// This error is reported when The user has the required permissions, so the request would have succeeded,
+// but the DryRun parameter was used.
+func isAwsErrorDryRunOperation(err error) bool {
+	return isAWSError(err, "DryRunOperation")
+}
+
 // Checks for desired size on volume by also verifying volume size by describing volume.
 // This is to get around potential eventual consistency problems with describing volume modifications
 // objects and ensuring that we read two different objects to verify volume state.
@@ -2707,6 +2654,7 @@ func capIOPS(volumeType string, requestedCapacityGiB int32, requestedIops int32,
 
 // Gets IOPS limits for a specific volume type in a specific Zone and caches it. If the limits are cached, simply return limits.
 func (c *cloud) getVolumeLimits(ctx context.Context, volumeType string, azParams getVolumeLimitsParams) (iopsLimits iopsLimits) {
+	klog.InfoS("getVolumeLimits called", "volumeType", volumeType, "azParams", azParams)
 	cacheKey := fmt.Sprintf("%s|%s|%s|%s", volumeType, azParams.availabilityZone, azParams.availabilityZoneId, azParams.outpostArn)
 	if value, ok := c.latestIOPSLimits.Get(cacheKey); ok {
 		return *value
@@ -2818,3 +2766,109 @@ func extractMaxIOPSFromError(errorMsg string, volumeType string) (int32, error) 
 
 	return 0, fmt.Errorf("error getting IOPS limit, defaulting to hardcoded values for volume type %s", volumeType)
 }
+
+// func (c *cloud) ProcessModifyDiskParameters(ctx context.Context, volumeID string, newSizeBytes int64, options ModifyDiskOptions) (bool, *ec2.ModifyVolumeInput, error) {
+
+// }
+
+// ProcessModifyDiskParameters prepares and validates parameters for modifying an EBS volume.
+// It returns whether modification is needed, the volume size, the prepared ModifyVolumeInput, and any error encountered.
+func (c *cloud) ProcessModifyDiskParameters(ctx context.Context, volumeID string, newSizeBytes int64, options *ModifyDiskOptions) (bool, int32, *ec2.ModifyVolumeInput, error) {
+	klog.InfoS("ProcessModifyDiskParameters", "volumeId", volumeID, "newSizeBytes", newSizeBytes, "ModifyDiskOptions", options)
+	newSizeGiB, err := util.RoundUpGiB(newSizeBytes)
+	if err != nil {
+		return false, 0, nil, err
+	}
+	request := &ec2.DescribeVolumesInput{
+		VolumeIds: []string{volumeID},
+	}
+	volume, err := c.getVolume(ctx, request)
+	if err != nil {
+		return false, 0, nil, err
+	}
+
+	needsModification, volumeSize, err := c.validateVolumeState(ctx, volumeID, newSizeGiB, *volume.Size, options)
+	if err != nil || !needsModification {
+		return needsModification, volumeSize, nil, err
+	}
+
+	if options.IOPS > 0 && options.IOPSPerGB > 0 {
+		return false, 0, nil, errors.New("invalid VAC parameter; specify either IOPS or IOPSPerGb, not both")
+	}
+
+	req := &ec2.ModifyVolumeInput{
+		VolumeId: aws.String(volumeID),
+	}
+	if newSizeBytes != 0 {
+		req.Size = aws.Int32(newSizeGiB)
+	}
+	volTypeToUse := volume.VolumeType
+	if options.VolumeType != "" {
+		req.VolumeType = types.VolumeType(options.VolumeType)
+		volTypeToUse = req.VolumeType
+	}
+	if options.Throughput != 0 {
+		req.Throughput = aws.Int32(options.Throughput)
+	}
+
+	var sizeToUse int32
+	if req.Size != nil {
+		sizeToUse = *req.Size
+	} else {
+		sizeToUse = *volume.Size
+	}
+
+	allowAutoIncreaseIsSet, iopsPerGbVal, err := c.checkIfIopsIncreaseOnExpansion(volume.Tags)
+	if err != nil {
+		return false, 0, nil, err
+	}
+	var iopsForModify int32
+	switch {
+	case options.IOPS != 0:
+		iopsForModify = options.IOPS
+	case options.IOPSPerGB != 0 && (options.AllowIopsIncreaseOnResize || allowAutoIncreaseIsSet):
+		iopsForModify = sizeToUse * options.IOPSPerGB
+	case iopsPerGbVal > 0 && (options.AllowIopsIncreaseOnResize || allowAutoIncreaseIsSet):
+		iopsForModify = sizeToUse * iopsPerGbVal
+	}
+	if iopsForModify != 0 {
+		azParams := getVolumeLimitsParams{}
+
+		if volume.AvailabilityZone != nil {
+			azParams.availabilityZone = *volume.AvailabilityZone
+		}
+		if volume.AvailabilityZoneId != nil {
+			azParams.availabilityZoneId = *volume.AvailabilityZoneId
+		}
+		if volume.OutpostArn != nil {
+			azParams.outpostArn = *volume.OutpostArn
+		}
+		klog.V(4).InfoS("getVolumeLimits azParams", "availabilityZone", azParams.availabilityZone, "availabilityZoneId", azParams.availabilityZoneId, "outpostArn", azParams.outpostArn)
+		iopsLimits := c.getVolumeLimits(ctx, string(volTypeToUse), azParams)
+		req.Iops = aws.Int32(capIOPS(string(volTypeToUse), sizeToUse, iopsForModify, iopsLimits, true))
+		options.IOPS = *req.Iops
+	}
+
+	needsModification, volumeSize, err = c.validateModifyVolume(ctx, volumeID, newSizeGiB, options, *volume)
+	if err != nil || !needsModification {
+		return needsModification, volumeSize, nil, err
+	}
+
+	return true, 0, req, nil
+}
+
+// // dryRunModifyVolume performs a dry run of ModifyVolume to validate parameters before actual execution.
+// func (c *cloud) DryRunModifyVolume(ctx context.Context, req *ec2.ModifyVolumeInput) error {
+// 	klog.InfoS("In DryRunModifyVolume", "req", req)
+// 	dryRunReq := *req
+// 	dryRunReq.DryRun = aws.Bool(true)
+// 	_, err := c.ec2.ModifyVolume(ctx, &dryRunReq)
+// 	if err != nil {
+// 		var awsErr smithy.APIError
+// 		if errors.As(err, &awsErr) && awsErr.ErrorCode() == "DryRunOperation" {
+// 			return nil // Expected dry run success
+// 		}
+// 		return err // Real error
+// 	}
+// 	return nil
+// }

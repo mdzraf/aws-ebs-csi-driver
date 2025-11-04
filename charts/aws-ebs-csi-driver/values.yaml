@@ -281,7 +281,7 @@ controller:
   # ---
   # region: us-east-1
   region:
-  replicaCount: 2
+  replicaCount: 1
   revisionHistoryLimit: 10
   socketDirVolume:
     emptyDir: {}
