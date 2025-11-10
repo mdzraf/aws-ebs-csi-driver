@@ -12,68 +12,82 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build linux
+// go:build linux
 
 package sanity
 
-// func TestSanity(t *testing.T) {
-// 	defer func() {
-// 		if r := recover(); r != nil {
-// 			t.Errorf("Test panicked: %v", r)
-// 		}
-// 	}()
+import (
+	"fmt"
+	"path"
+	"testing"
 
-// 	mockCtrl := gomock.NewController(t)
-// 	defer mockCtrl.Finish()
+	"github.com/aws/aws-sdk-go-v2/aws/arn"
+	"github.com/golang/mock/gomock"
+	"github.com/kubernetes-sigs/aws-ebs-csi-driver/pkg/cloud/metadata"
+	"github.com/kubernetes-sigs/aws-ebs-csi-driver/pkg/driver"
+	"github.com/kubernetes-sigs/aws-ebs-csi-driver/pkg/util"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+)
 
-// 	tmpDir := t.TempDir()
+func TestSanity(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("Test panicked: %v", r)
+		}
+	}()
 
-// 	endpoint := fmt.Sprintf("unix:%s/csi.sock", tmpDir)
-// 	mountPath := path.Join(tmpDir, "mount")
-// 	stagePath := path.Join(tmpDir, "stage")
-// 	instanceID := "i-1234567890abcdef0"
-// 	region := "us-west-2"
-// 	availabilityZone := "us-west-2a"
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
 
-// 	driverOptions := &driver.Options{
-// 		Mode:                              driver.AllMode,
-// 		ModifyVolumeRequestHandlerTimeout: 60,
-// 		Endpoint:                          endpoint,
-// 	}
+	tmpDir := t.TempDir()
 
-// 	fakeMetadata := &metadata.Metadata{
-// 		InstanceID: instanceID,
-// 		Region:     region,
-// 	}
+	endpoint := fmt.Sprintf("unix:%s/csi.sock", tmpDir)
+	mountPath := path.Join(tmpDir, "mount")
+	stagePath := path.Join(tmpDir, "stage")
+	instanceID := "i-1234567890abcdef0"
+	region := "us-west-2"
+	availabilityZone := "us-west-2a"
 
-// 	outpostArn := &arn.ARN{
-// 		Partition: "aws",
-// 		Service:   "outposts",
-// 		Region:    "us-west-2",
-// 		AccountID: "123456789012",
-// 		Resource:  "op-1234567890abcdef0",
-// 	}
+	driverOptions := &driver.Options{
+		Mode:                              driver.AllMode,
+		ModifyVolumeRequestHandlerTimeout: 60,
+		Endpoint:                          endpoint,
+	}
 
-// 	drv, err := driver.NewDriver(newFakeCloud(fakeMetadata, mountPath), driverOptions, newFakeMounter(), newFakeMetadataService(instanceID, region, availabilityZone, *outpostArn), nil)
-// 	if err != nil {
-// 		t.Fatalf("Failed to create fake driver: %v", err.Error())
-// 	}
-// 	go func() {
-// 		if err := drv.Run(); err != nil {
-// 			panic(fmt.Sprintf("%v", err))
-// 		}
-// 	}()
+	fakeMetadata := &metadata.Metadata{
+		InstanceID: instanceID,
+		Region:     region,
+	}
 
-// 	config := csisanity.TestConfig{
-// 		TargetPath:                  mountPath,
-// 		StagingPath:                 stagePath,
-// 		Address:                     endpoint,
-// 		DialOptions:                 []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())},
-// 		IDGen:                       csisanity.DefaultIDGenerator{},
-// 		TestVolumeSize:              10 * util.GiB,
-// 		TestVolumeAccessType:        "mount",
-// 		TestVolumeMutableParameters: map[string]string{"iops": "3014", "throughput": "153"},
-// 		TestVolumeParameters:        map[string]string{"type": "gp3", "iops": "3000"},
-// 	}
-// 	csisanity.Test(t, config)
-// }
+	outpostArn := &arn.ARN{
+		Partition: "aws",
+		Service:   "outposts",
+		Region:    "us-west-2",
+		AccountID: "123456789012",
+		Resource:  "op-1234567890abcdef0",
+	}
+
+	drv, err := driver.NewDriver(newFakeCloud(fakeMetadata, mountPath), driverOptions, newFakeMounter(), newFakeMetadataService(instanceID, region, availabilityZone, *outpostArn), nil)
+	if err != nil {
+		t.Fatalf("Failed to create fake driver: %v", err.Error())
+	}
+	go func() {
+		if err := drv.Run(); err != nil {
+			panic(fmt.Sprintf("%v", err))
+		}
+	}()
+
+	config := csisanity.TestConfig{
+		TargetPath:                  mountPath,
+		StagingPath:                 stagePath,
+		Address:                     endpoint,
+		DialOptions:                 []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())},
+		IDGen:                       csisanity.DefaultIDGenerator{},
+		TestVolumeSize:              10 * util.GiB,
+		TestVolumeAccessType:        "mount",
+		TestVolumeMutableParameters: map[string]string{"iops": "3014", "throughput": "153"},
+		TestVolumeParameters:        map[string]string{"type": "gp3", "iops": "3000"},
+	}
+	csisanity.Test(t, config)
+}

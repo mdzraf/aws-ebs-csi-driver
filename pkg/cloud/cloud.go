@@ -2856,19 +2856,3 @@ func (c *cloud) ProcessModifyDiskParameters(ctx context.Context, volumeID string
 
 	return true, 0, req, nil
 }
-
-// // dryRunModifyVolume performs a dry run of ModifyVolume to validate parameters before actual execution.
-// func (c *cloud) DryRunModifyVolume(ctx context.Context, req *ec2.ModifyVolumeInput) error {
-// 	klog.InfoS("In DryRunModifyVolume", "req", req)
-// 	dryRunReq := *req
-// 	dryRunReq.DryRun = aws.Bool(true)
-// 	_, err := c.ec2.ModifyVolume(ctx, &dryRunReq)
-// 	if err != nil {
-// 		var awsErr smithy.APIError
-// 		if errors.As(err, &awsErr) && awsErr.ErrorCode() == "DryRunOperation" {
-// 			return nil // Expected dry run success
-// 		}
-// 		return err // Real error
-// 	}
-// 	return nil
-// }

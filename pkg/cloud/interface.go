@@ -42,5 +42,4 @@ type Cloud interface {
 	DryRun(ctx context.Context) error
 	GetInstancesPatching(ctx context.Context, nodeIDs []string) ([]*types.Instance, error)
 	ProcessModifyDiskParameters(ctx context.Context, volumeID string, newSizeBytes int64, options *ModifyDiskOptions) (bool, int32, *ec2.ModifyVolumeInput, error)
-	// DryRunModifyVolume(ctx context.Context, req *ec2.ModifyVolumeInput) error
 }
