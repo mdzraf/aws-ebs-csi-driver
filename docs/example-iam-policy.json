@@ -2,6 +2,7 @@
   "Version" : "2012-10-17",
   "Statement" : [
     {
+      "Sid":"ReadOnlyDescribeOperations",
       "Effect" : "Allow",
       "Action" : [
         "ec2:DescribeAvailabilityZones",
@@ -14,9 +15,22 @@
       "Resource" : "*"
     },
     {
+      "Sid":"CreateVolumesWithManagedTag", 
       "Effect" : "Allow",
       "Action" : [
-        "ec2:CreateVolume",
+        "ec2:CreateVolume"
+      ],
+      "Resource" : "arn:aws:ec2:*:*:volume/*",
+      "Condition" : {
+        "StringLike" : {
+          "aws:RequestTag/ebs.csi.aws.com/cluster" : "true"
+        }
+      }
+    },
+    {
+      "Sid":"CopyVolumesWithManagedTag", 
+      "Effect" : "Allow",
+      "Action" : [
         "ec2:CopyVolumes"
       ],
       "Resource" : "arn:aws:ec2:*:*:volume/*",
@@ -27,19 +41,7 @@
       }
     },
     {
-      "Effect" : "Allow",
-      "Action" : [
-        "ec2:CreateVolume",
-        "ec2:CopyVolumes"
-      ],
-      "Resource" : "arn:aws:ec2:*:*:volume/*",
-      "Condition" : {
-        "StringLike" : {
-          "aws:RequestTag/CSIVolumeName" : "*"
-        }
-      }
-    },
-    {
+      "Sid":"CopyManagedVolumes",
       "Effect" : "Allow",
       "Action" : [
         "ec2:CopyVolumes"
@@ -52,6 +54,7 @@
       }
     },
     {
+      "Sid":"CopyCSIMigratedVolumes",
       "Effect" : "Allow",
       "Action" : [
         "ec2:CopyVolumes"
@@ -64,18 +67,7 @@
       }
     },
     {
-      "Effect" : "Allow",
-      "Action" : [
-        "ec2:CreateSnapshot"
-      ],
-      "Resource" : "arn:aws:ec2:*:*:snapshot/*",
-      "Condition" : {
-        "StringLike" : {
-          "aws:RequestTag/CSIVolumeSnapshotName" : "*"
-        }
-      }
-    },
-    {
+      "Sid":"CreateSnapshotsWithManagedTag",
       "Effect" : "Allow",
       "Action" : [
         "ec2:CreateSnapshot"
@@ -88,9 +80,22 @@
       }
     },
     {
+      "Sid":"CreateSnapshotsFromManagedVolumes",
       "Effect" : "Allow",
       "Action" : [
-        "ec2:CreateSnapshot",
+        "ec2:CreateSnapshot"
+      ],
+      "Resource" : "arn:aws:ec2:*:*:volume/*",
+      "Condition" : {
+        "StringLike" : {
+          "ec2:ResourceTag/ebs.csi.aws.com/cluster" : "true"
+        }
+      }
+    },
+    {
+      "Sid":"ModifyManagedVolumes",
+      "Effect" : "Allow",
+      "Action" : [
         "ec2:ModifyVolume"
       ],
       "Resource" : "arn:aws:ec2:*:*:volume/*",
@@ -101,6 +106,7 @@
       }
     },
     {
+      "Sid":"ModifyCSIMigratedVolumes",
       "Effect" : "Allow",
       "Action" : [
         "ec2:ModifyVolume"
@@ -113,9 +119,22 @@
       }
     },
     {
+      "Sid":"CreateVolumesFromManagedSnapshots",
       "Effect" : "Allow",
       "Action" : [
-        "ec2:CreateVolume",
+        "ec2:CreateVolume"
+      ],
+      "Resource" : "arn:aws:ec2:*:*:snapshot/*",
+      "Condition" : {
+        "StringLike" : {
+          "ec2:ResourceTag/ebs.csi.aws.com/cluster" : "true"
+        }
+      }
+    },
+    {
+      "Sid":"EnableFastSnapshotRestoresOnManagedSnapshots",
+      "Effect" : "Allow",
+      "Action" : [
         "ec2:EnableFastSnapshotRestores"
       ],
       "Resource" : "arn:aws:ec2:*:*:snapshot/*",
@@ -126,6 +145,7 @@
       }
     },
     {
+      "Sid":"AttachDetachManagedVolumes",
       "Effect" : "Allow",
       "Action" : [
         "ec2:AttachVolume",
@@ -139,6 +159,7 @@
       }
     },
     {
+      "Sid":"AttachDetachCSIMigratedVolumes",
       "Effect" : "Allow",
       "Action" : [
         "ec2:AttachVolume",
@@ -152,6 +173,7 @@
       }
     },
     {
+      "Sid":"AttachDetachVolumesToAnyInstance",
       "Effect" : "Allow",
       "Action" : [
         "ec2:AttachVolume",
@@ -160,6 +182,7 @@
       "Resource" : "arn:aws:ec2:*:*:instance/*"
     },
     {
+      "Sid":"DeleteManagedVolumes",
       "Effect" : "Allow",
       "Action" : [
         "ec2:DeleteVolume"
@@ -172,18 +195,7 @@
       }
     },
     {
-      "Effect" : "Allow",
-      "Action" : [
-        "ec2:DeleteVolume"
-      ],
-      "Resource" : "arn:aws:ec2:*:*:volume/*",
-      "Condition" : {
-        "StringLike" : {
-          "ec2:ResourceTag/CSIVolumeName" : "*"
-        }
-      }
-    },
-    {
+      "Sid":"DeleteCSIMigratedVolumes",
       "Effect" : "Allow",
       "Action" : [
         "ec2:DeleteVolume"
@@ -196,22 +208,22 @@
       }
     },
     {
+      "Sid":"DeleteManagedSnapshots",
       "Effect" : "Allow",
       "Action" : [
-        "ec2:DeleteSnapshot",
-        "ec2:LockSnapshot"
+        "ec2:DeleteSnapshot"
       ],
       "Resource" : "arn:aws:ec2:*:*:snapshot/*",
       "Condition" : {
         "StringLike" : {
-          "ec2:ResourceTag/CSIVolumeSnapshotName" : "*"
+          "ec2:ResourceTag/ebs.csi.aws.com/cluster" : "true"
         }
       }
     },
-        {
+    {
+      "Sid":"LockManagedSnapshots",
       "Effect" : "Allow",
       "Action" : [
-        "ec2:DeleteSnapshot",
         "ec2:LockSnapshot"
       ],
       "Resource" : "arn:aws:ec2:*:*:snapshot/*",
@@ -222,6 +234,7 @@
       }
     },
     {
+      "Sid":"TagResourcesOnCreation",
       "Effect" : "Allow",
       "Action" : [
         "ec2:CreateTags"
@@ -241,29 +254,19 @@
       }
     },
     {
+      "Sid":"ModifyTagsOnManagedVolumes",
       "Effect" : "Allow",
       "Action" : [
-        "ec2:CreateTags"
+        "ec2:CreateTags",
+        "ec2:DeleteTags"
       ],
       "Resource" : "arn:aws:ec2:*:*:volume/*",
       "Condition" : {
         "StringLike" : {
           "ec2:ResourceTag/ebs.csi.aws.com/cluster" : "true"
-        }
-      }
-    },
-    {
-      "Effect" : "Allow",
-      "Action" : [
-        "ec2:DeleteTags"
-      ],
-      "Resource" : [
-        "arn:aws:ec2:*:*:volume/*",
-        "arn:aws:ec2:*:*:snapshot/*"
-      ],
-      "Condition" : {
-        "StringLike" : {
-          "ec2:ResourceTag/ebs.csi.aws.com/cluster" : "true"
+        },
+        "ForAllValues:StringNotEquals" : {
+          "aws:TagKeys" : "ebs.csi.aws.com/cluster"
         }
       }
     }

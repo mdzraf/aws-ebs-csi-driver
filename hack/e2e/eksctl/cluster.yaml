@@ -41,6 +41,12 @@ iam:
           - Effect: Allow
             Action:
               - ec2:CreateVolume
+            Resource: "arn:aws:ec2:*:*:volume/*"
+            Condition:
+              StringLike:
+                "aws:RequestTag/ebs.csi.aws.com/cluster": "true"
+          - Effect: Allow
+            Action:
               - ec2:CopyVolumes
             Resource: "arn:aws:ec2:*:*:volume/*"
             Condition:
@@ -49,6 +55,12 @@ iam:
           - Effect: Allow
             Action:
               - ec2:CreateVolume
+            Resource: "arn:aws:ec2:*:*:volume/*"
+            Condition:
+              StringLike:
+                "aws:RequestTag/CSIVolumeName": "*"
+          - Effect: Allow
+            Action:
               - ec2:CopyVolumes
             Resource: "arn:aws:ec2:*:*:volume/*"
             Condition:
@@ -61,6 +73,13 @@ iam:
             Condition:
               StringLike:
                 "ec2:ResourceTag/ebs.csi.aws.com/cluster": "true"
+          - Effect: Allow
+            Action:
+              - ec2:CopyVolumes
+            Resource: "arn:aws:ec2:*:*:volume/vol-*"
+            Condition:
+              StringLike:
+                "ec2:ResourceTag/kubernetes.io/created-for/pvc/name": "*"
           - Effect: Allow
             Action:
               - ec2:CreateSnapshot
@@ -78,6 +97,12 @@ iam:
           - Effect: Allow
             Action:
               - ec2:CreateSnapshot
+            Resource: "arn:aws:ec2:*:*:volume/*"
+            Condition:
+              StringLike:
+                "ec2:ResourceTag/ebs.csi.aws.com/cluster": "true"
+          - Effect: Allow
+            Action:
               - ec2:ModifyVolume
             Resource: "arn:aws:ec2:*:*:volume/*"
             Condition:
@@ -85,7 +110,20 @@ iam:
                 "ec2:ResourceTag/ebs.csi.aws.com/cluster": "true"
           - Effect: Allow
             Action:
+              - ec2:ModifyVolume
+            Resource: "arn:aws:ec2:*:*:volume/*"
+            Condition:
+              StringLike:
+                "ec2:ResourceTag/kubernetes.io/created-for/pvc/name": "*"
+          - Effect: Allow
+            Action:
               - ec2:CreateVolume
+            Resource: "arn:aws:ec2:*:*:snapshot/*"
+            Condition:
+              StringLike:
+                "ec2:ResourceTag/ebs.csi.aws.com/cluster": "true"
+          - Effect: Allow
+            Action:
               - ec2:EnableFastSnapshotRestores
             Resource: "arn:aws:ec2:*:*:snapshot/*"
             Condition:
@@ -99,6 +137,14 @@ iam:
             Condition:
               StringLike:
                 "ec2:ResourceTag/ebs.csi.aws.com/cluster": "true"
+          - Effect: Allow
+            Action:
+              - ec2:AttachVolume
+              - ec2:DetachVolume
+            Resource: "arn:aws:ec2:*:*:volume/*"
+            Condition:
+              StringLike:
+                "ec2:ResourceTag/kubernetes.io/created-for/pvc/name": "*"
           - Effect: Allow
             Action:
               - ec2:AttachVolume
@@ -128,6 +174,12 @@ iam:
           - Effect: Allow
             Action:
               - ec2:DeleteSnapshot
+            Resource: "arn:aws:ec2:*:*:snapshot/*"
+            Condition:
+              StringLike:
+                "ec2:ResourceTag/CSIVolumeSnapshotName": "*"
+          - Effect: Allow
+            Action:
               - ec2:LockSnapshot
             Resource: "arn:aws:ec2:*:*:snapshot/*"
             Condition:
@@ -136,6 +188,12 @@ iam:
           - Effect: Allow
             Action:
               - ec2:DeleteSnapshot
+            Resource: "arn:aws:ec2:*:*:snapshot/*"
+            Condition:
+              StringLike:
+                "ec2:ResourceTag/ebs.csi.aws.com/cluster": "true"
+          - Effect: Allow
+            Action:
               - ec2:LockSnapshot
             Resource: "arn:aws:ec2:*:*:snapshot/*"
             Condition:
