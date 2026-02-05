@@ -78,6 +78,10 @@ test-helm-chart)
   TEST="helm-ct"
   export INSTANCE_TYPE="c5.2xlarge"
   ;;
+test-e2e-parameters)
+  TEST="parameters-all"
+  export AWS_AVAILABILITY_ZONES="us-west-2a"
+  ;;
 *)
   echo "Unknown e2e test ${1}" >&2
   exit 1
@@ -106,6 +110,11 @@ done
 if [[ $E2E_PASSED -eq 0 ]]; then
   make e2e/${TEST}
   E2E_PASSED=$?
+  if [[ "${TEST}" == "single-az" && $E2E_PASSED -eq 0 ]]; then
+    echo "Running parameter tests after single-az..."
+    make e2e/parameters-all
+    E2E_PASSED=$?
+  fi
 fi
 make cluster/delete
 
