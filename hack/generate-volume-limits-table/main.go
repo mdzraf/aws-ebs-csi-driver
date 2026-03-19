@@ -22,6 +22,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/kubernetes-sigs/aws-ebs-csi-driver/pkg/util"
@@ -107,6 +108,13 @@ func getInstanceTypesForRegion(ctx context.Context, region string) (map[string]i
 	instances := make(map[string]instanceData)
 	paginator := ec2.NewDescribeInstanceTypesPaginator(ec2Client, &ec2.DescribeInstanceTypesInput{})
 
+	// Added as these instances have limits incorrectly reported from DescribeInstanceTypes
+	wrongLimitInstances := map[string]*int32{
+		"c8gn.48xlarge": aws.Int32(64),
+		"r8gn.48xlarge": aws.Int32(64),
+		"m8gn.48xlarge": aws.Int32(64),
+	}
+
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
 		if err != nil {
@@ -125,6 +133,10 @@ func getInstanceTypesForRegion(ctx context.Context, region string) (map[string]i
 				log.Fatalf("AttachmentLimitType is invalid value %s for instance type %s", instanceType.InstanceType, instanceType.EbsInfo.AttachmentLimitType)
 			case instanceType.EbsInfo.MaximumEbsCards != nil && *instanceType.EbsInfo.MaximumEbsCards < 1:
 				log.Fatalf("MaximumEbsCards is less than 1 for instance type %s: %d", instanceType.InstanceType, *instanceType.EbsInfo.MaximumEbsCards)
+			}
+
+			if limit, ok := wrongLimitInstances[string(instanceType.InstanceType)]; ok {
+				instanceType.EbsInfo.MaximumEbsAttachments = limit
 			}
 
 			key := string(instanceType.InstanceType)
