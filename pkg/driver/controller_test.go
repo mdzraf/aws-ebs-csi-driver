@@ -2440,6 +2440,7 @@ func TestCreateVolume(t *testing.T) {
 						expectedOwnerTag:             expectedOwnerTagValue,
 						expectedNameTag:              expectedNameTagValue,
 						expectedKubernetesClusterTag: expectedKubernetesClusterTagValue,
+						ClusterNameTagKey:            clusterID,
 					},
 				}
 
@@ -2760,6 +2761,7 @@ func TestCreateVolume(t *testing.T) {
 					ResourceLifecycleTagPrefix + clusterID: ResourceLifecycleOwned,
 					NameTag:                                userNameTag, // User tag overrides cluster tag
 					KubernetesClusterTag:                   clusterID,
+					ClusterNameTagKey:                      clusterID,
 				}
 
 				diskOptions := &cloud.DiskOptions{
@@ -3744,6 +3746,7 @@ func TestCreateSnapshot(t *testing.T) {
 						cloud.AwsEbsDriverTagKey: "true",
 						expectedOwnerTag:         expectedOwnerTagValue,
 						expectedNameTag:          expectedNameTagValue,
+						ClusterNameTagKey:        clusterID,
 					},
 				}
 				mockCtl := gomock.NewController(t)
@@ -4146,6 +4149,7 @@ func TestCreateSnapshot(t *testing.T) {
 						cloud.AwsEbsDriverTagKey:               isManagedByDriver,
 						NameTag:                                nameTagValue,
 						ResourceLifecycleTagPrefix + clusterID: ResourceLifecycleOwned,
+						ClusterNameTagKey:                      clusterID,
 					},
 				}
 

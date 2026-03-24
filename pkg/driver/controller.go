@@ -285,6 +285,7 @@ func (d *ControllerService) CreateVolume(ctx context.Context, req *csi.CreateVol
 		volumeTags[resourceLifecycleTag] = ResourceLifecycleOwned
 		volumeTags[NameTag] = d.options.KubernetesClusterID + "-dynamic-" + volName
 		volumeTags[KubernetesClusterTag] = d.options.KubernetesClusterID
+		volumeTags[ClusterNameTagKey] = d.options.KubernetesClusterID
 	}
 
 	maps.Copy(volumeTags, addTags)
@@ -930,6 +931,7 @@ func (d *ControllerService) CreateSnapshot(ctx context.Context, req *csi.CreateS
 		resourceLifecycleTag := ResourceLifecycleTagPrefix + d.options.KubernetesClusterID
 		snapshotTags[resourceLifecycleTag] = ResourceLifecycleOwned
 		snapshotTags[NameTag] = d.options.KubernetesClusterID + "-dynamic-" + snapshotName
+		snapshotTags[ClusterNameTagKey] = d.options.KubernetesClusterID
 	}
 	maps.Copy(snapshotTags, d.options.ExtraTags)
 

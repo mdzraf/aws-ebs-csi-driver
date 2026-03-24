@@ -30,6 +30,7 @@ var (
 		cloud.VolumeNameTagKey:           "",
 		cloud.AwsEbsDriverTagKey:         "",
 		cloud.SnapshotNameTagKey:         "",
+		ClusterNameTagKey:                "",
 		IopsPerGBKey:                     "",
 		AllowAutoIOPSIncreaseOnModifyKey: "",
 	}

@@ -882,4 +882,57 @@ var _ = Describe("[ebs-csi-e2e] [single-az] [requires-aws-api] Dynamic Provision
 		}
 		test.Run(cs, ns)
 	})
+
+	It("should tag a volume with cluster identity when k8s-tag-cluster-id is set", func() {
+		testTag := generateTagName()
+		pods := []testsuites.PodDetails{
+			{
+				Cmd: testsuites.PodCmdWriteToVolume("/mnt/test-1"),
+				Volumes: []testsuites.VolumeDetails{
+					{
+						CreateVolumeParameters: map[string]string{
+							ebscsidriver.VolumeTypeKey: awscloud.VolumeTypeGP3,
+							ebscsidriver.FSTypeKey:     ebscsidriver.FSTypeExt4,
+							ebscsidriver.TagKeyPrefix:  fmt.Sprintf("%s=%s", testTag, testTagValue),
+						},
+						ClaimSize:   driver.MinimumSizeForVolumeType(awscloud.VolumeTypeGP3),
+						VolumeMount: testsuites.DefaultGeneratedVolumeMount,
+					},
+				},
+			},
+		}
+		test := testsuites.DynamicallyProvisionedCmdVolumeTest{
+			CSIDriver: ebsDriver,
+			Pods:      pods,
+			ValidateFunc: func() {
+				result, err := ec2Client.DescribeVolumes(context.Background(), &ec2.DescribeVolumesInput{
+					Filters: []types.Filter{
+						{
+							Name:   aws.String("tag:" + testTag),
+							Values: []string{testTagValue},
+						},
+					},
+				})
+				if err != nil {
+					Fail(fmt.Sprintf("failed to describe volume: %v", err))
+				}
+
+				if len(result.Volumes) != 1 {
+					Fail(fmt.Sprintf("expected 1 volume, got %d", len(result.Volumes)))
+				}
+
+				found := false
+				for _, tag := range result.Volumes[0].Tags {
+					if aws.ToString(tag.Key) == ebscsidriver.ClusterNameTagKey && aws.ToString(tag.Value) != "" {
+						found = true
+						break
+					}
+				}
+				if !found {
+					Fail(fmt.Sprintf("expected volume to have non-empty %s tag", ebscsidriver.ClusterNameTagKey))
+				}
+			},
+		}
+		test.Run(cs, ns)
+	})
 })
