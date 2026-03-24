@@ -181,6 +181,9 @@ const (
 	// the external provisioner sidecar is started with --extra-create-metadata=true and
 	// thus provides such metadata to the CSI driver.
 	PVNameTag = "kubernetes.io/created-for/pv/name"
+
+	// ClusterNameTagKey is the resource tag key for cluster-scoped IAM policies.
+	ClusterNameTagKey = "ebs.csi.aws.com/cluster-name"
 )
 
 // constants for default command line flag values.

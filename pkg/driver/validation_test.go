@@ -67,6 +67,13 @@ func TestValidateExtraTags(t *testing.T) {
 			},
 			expErr: fmt.Errorf("tag key prefix '%s' is reserved", cloud.KubernetesTagKeyPrefix),
 		},
+		{
+			name: "invalid tag: reserved cluster name key",
+			tags: map[string]string{
+				ClusterNameTagKey: "my-cluster",
+			},
+			expErr: fmt.Errorf("tag key '%s' is reserved", ClusterNameTagKey),
+		},
 	}
 
 	for _, tc := range testCases {
