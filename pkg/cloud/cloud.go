@@ -2382,11 +2382,9 @@ func (c *cloud) waitForVolume(ctx context.Context, volumeID string) (*types.Volu
 		if err != nil {
 			return true, err
 		}
-		if vol.State != "" {
-			if vol.State == types.VolumeStateAvailable {
-				volume = vol
-				return true, nil
-			}
+		if vol.State == types.VolumeStateAvailable || vol.State == types.VolumeStateInUse {
+			volume = vol
+			return true, nil
 		}
 		return false, nil
 	})
