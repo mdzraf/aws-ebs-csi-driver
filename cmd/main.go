@@ -60,10 +60,10 @@ func main() {
 
 	var (
 		metadataRequiredModes = map[string]struct{}{
-			string(driver.ControllerMode): {},
-			string(driver.NodeMode):       {},
-			string(driver.AllMode):        {},
-			driver.MetadataLabelerMode:    {},
+			string(driver.ControllerMode):      {},
+			string(driver.NodeMode):            {},
+			string(driver.AllMode):             {},
+			string(driver.MetadataLabelerMode): {},
 		}
 	)
 
@@ -192,7 +192,15 @@ func main() {
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 		}
-		cloud = cloudPkg.NewCloud(region, options.AwsSdkDebugLog, options.UserAgentExtra, options.Batching, options.DeprecatedMetrics)
+		userAgentExtra := options.UserAgentExtra
+		if options.Mode == driver.MetadataLabelerMode {
+			if userAgentExtra != "" {
+				userAgentExtra += "-" + string(driver.MetadataLabelerMode)
+			} else {
+				userAgentExtra = string(driver.MetadataLabelerMode)
+			}
+		}
+		cloud = cloudPkg.NewCloud(region, options.AwsSdkDebugLog, userAgentExtra, options.Batching, options.DeprecatedMetrics)
 	}
 
 	k8sClient, err = cfg.K8sAPIClient()
@@ -214,7 +222,7 @@ func main() {
 		}
 		klog.FlushAndExit(klog.ExitFlushTimeout, 0)
 	case string(driver.ControllerMode), string(driver.NodeMode), string(driver.AllMode):
-	case driver.MetadataLabelerMode:
+	case string(driver.MetadataLabelerMode):
 		err := metadata.ContinuousUpdateLabelsLeaderElection(k8sClient, cloud, metadata.ControllerMetadataLabelerInterval)
 		if err != nil {
 			klog.ErrorS(err, "failed to patch volume/ENI count on node labels")

@@ -115,14 +115,18 @@ func (o *Options) AddFlags(f *flag.FlagSet) {
 	f.BoolVar(&o.EnableOtelTracing, "enable-otel-tracing", false, "To enable opentelemetry tracing for the driver. The tracing is disabled by default. Configure the exporter endpoint with OTEL_EXPORTER_OTLP_ENDPOINT and other env variables, see https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#general-sdk-configuration.")
 	f.StringSliceVar(&o.MetadataSources, "metadata-sources", metadata.DefaultMetadataSources, "Dictates which sources are used to retrieve instance metadata. The driver will attempt to rely on each source in order until one succeeds. Valid options include 'imds', 'kubernetes', and (ALPHA) 'metadata-labeler'.")
 
+	// AWS SDK options, shared by all modes that create a cloud client
+	if o.Mode == AllMode || o.Mode == ControllerMode || o.Mode == MetadataLabelerMode {
+		f.StringVar(&o.UserAgentExtra, "user-agent-extra", "", "Extra string appended to user agent.")
+		f.BoolVar(&o.AwsSdkDebugLog, "aws-sdk-debug-log", false, "To enable the aws sdk debug log level (default to false).")
+	}
+
 	// Controller options
 	if o.Mode == AllMode || o.Mode == ControllerMode {
 		f.Var(cliflag.NewMapStringString(&o.ExtraTags), "extra-tags", "Extra tags to attach to each dynamically provisioned resource. It is a comma separated list of key value pairs like '<key1>=<value1>,<key2>=<value2>'")
 		f.Var(cliflag.NewMapStringString(&o.ExtraVolumeTags), "extra-volume-tags", "DEPRECATED: Please use --extra-tags instead. Extra volume tags to attach to each dynamically provisioned volume. It is a comma separated list of key value pairs like '<key1>=<value1>,<key2>=<value2>'")
 		f.StringVar(&o.KubernetesClusterID, "k8s-tag-cluster-id", "", "ID of the Kubernetes cluster used for tagging provisioned EBS volumes (optional).")
-		f.BoolVar(&o.AwsSdkDebugLog, "aws-sdk-debug-log", false, "To enable the aws sdk debug log level (default to false).")
 		f.BoolVar(&o.WarnOnInvalidTag, "warn-on-invalid-tag", false, "To warn on invalid tags, instead of returning an error")
-		f.StringVar(&o.UserAgentExtra, "user-agent-extra", "", "Extra string appended to user agent.")
 		f.BoolVar(&o.Batching, "batching", false, "To enable batching of API calls. This is especially helpful for improving performance in workloads that are sensitive to EC2 rate limits.")
 		f.DurationVar(&o.ModifyVolumeRequestHandlerTimeout, "modify-volume-request-handler-timeout", DefaultModifyVolumeRequestHandlerTimeout, "Timeout for the window in which volume modification calls must be received in order for them to coalesce into a single volume modification call to AWS. This must be lower than the csi-resizer and volumemodifier timeouts")
 		f.BoolVar(&o.DeprecatedMetrics, "deprecated-metrics", false, "DEPRECATED: To enable deprecated metrics. This parameter is only for backward compatibility and may be removed in a future release.")
