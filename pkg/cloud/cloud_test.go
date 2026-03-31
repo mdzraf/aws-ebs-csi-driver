@@ -855,6 +855,22 @@ func TestCreateDisk(t *testing.T) {
 			expErr: nil,
 		},
 		{
+			name:       "success: volume in-use state",
+			volumeName: "vol-test-name",
+			volState:   "in-use",
+			diskOptions: &DiskOptions{
+				CapacityBytes: util.GiBToBytes(1),
+				Tags:          map[string]string{VolumeNameTagKey: "vol-test", AwsEbsDriverTagKey: "true"},
+			},
+			expCreateVolumeInput: &ec2.CreateVolumeInput{},
+			expDisk: &Disk{
+				VolumeID:         "vol-test",
+				CapacityGiB:      1,
+				AvailabilityZone: defaultZone,
+			},
+			expErr: nil,
+		},
+		{
 			name:       "success: normal clone",
 			volumeName: "vol-test-name",
 			diskOptions: &DiskOptions{
