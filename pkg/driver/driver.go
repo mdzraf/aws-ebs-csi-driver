@@ -45,7 +45,7 @@ const (
 	AllMode Mode = "all"
 
 	// MetadataLabelerMode is the mode that starts the metadata labeler.
-	MetadataLabelerMode = "metadataLabeler"
+	MetadataLabelerMode Mode = "metadataLabeler"
 )
 
 const (
@@ -108,6 +108,8 @@ func NewDriver(c cloud.Cloud, o *Options, m mounter.Mounter, md metadata.Metadat
 	case AllMode:
 		driver.controller = NewControllerService(c, o)
 		driver.node = NewNodeService(o, md, m, k)
+	case MetadataLabelerMode:
+		return nil, fmt.Errorf("mode %s is not handled by the driver, it is handled separately in main", o.Mode)
 	default:
 		return nil, fmt.Errorf("unknown mode: %s", o.Mode)
 	}
@@ -156,6 +158,8 @@ func (d *Driver) Run() error {
 		csi.RegisterControllerServer(d.srv, d.controller)
 		csi.RegisterNodeServer(d.srv, d.node)
 		rpc.RegisterModifyServer(d.srv, d.controller)
+	case MetadataLabelerMode:
+		return fmt.Errorf("mode %s is not handled by the driver, it is handled separately in main", d.options.Mode)
 	default:
 		return fmt.Errorf("unknown mode: %s", d.options.Mode)
 	}
