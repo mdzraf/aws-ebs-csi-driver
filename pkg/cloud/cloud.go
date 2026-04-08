@@ -40,6 +40,7 @@ import (
 	"github.com/aws/smithy-go"
 	"github.com/kubernetes-sigs/aws-ebs-csi-driver/pkg/batcher"
 	dm "github.com/kubernetes-sigs/aws-ebs-csi-driver/pkg/cloud/devicemanager"
+	"github.com/kubernetes-sigs/aws-ebs-csi-driver/pkg/cloud/limits"
 	"github.com/kubernetes-sigs/aws-ebs-csi-driver/pkg/expiringcache"
 	"github.com/kubernetes-sigs/aws-ebs-csi-driver/pkg/metrics"
 	"github.com/kubernetes-sigs/aws-ebs-csi-driver/pkg/plugin"
@@ -409,6 +410,7 @@ type cloud struct {
 	latestClientTokens    expiringcache.ExpiringCache[string, int]
 	volumeInitializations expiringcache.ExpiringCache[string, volumeInitialization]
 	latestIOPSLimits      expiringcache.ExpiringCache[string, iopsLimits]
+	cardCountCache        expiringcache.ExpiringCache[string, int]
 	accountID             string
 	accountIDOnce         sync.Once
 	attemptDryRun         atomic.Bool
@@ -503,6 +505,7 @@ func NewCloud(region string, awsSdkDebugLog bool, userAgentExtra string, batchin
 		latestClientTokens:    expiringcache.New[string, int](cacheForgetDelay),
 		volumeInitializations: expiringcache.New[string, volumeInitialization](volInitCacheForgetDelay),
 		latestIOPSLimits:      expiringcache.New[string, iopsLimits](iopsLimitCacheForgetDelay),
+		cardCountCache:        expiringcache.New[string, int](cacheForgetDelay),
 	}
 
 	// Ensure an EC2 Dry-run API call is made on startup and every dryRunInterval
@@ -1233,6 +1236,37 @@ func (c *cloud) batchDescribeInstances(request *ec2.DescribeInstancesInput) (*ty
 	return r.Result, nil
 }
 
+// getCardCount returns the number of EBS cards for a given instance type,
+// using a cache to avoid repeated API calls. Falls back to the static table
+// if the API call fails.
+func (c *cloud) getCardCount(ctx context.Context, instanceType string) int {
+	if val, ok := c.cardCountCache.Get(instanceType); ok {
+		return *val
+	}
+
+	resp, err := c.ec2.DescribeInstanceTypes(ctx, &ec2.DescribeInstanceTypesInput{
+		InstanceTypes: []types.InstanceType{types.InstanceType(instanceType)},
+	})
+	if err != nil {
+		cards := limits.GetCardCount(instanceType)
+		klog.ErrorS(err, "Failed to describe instance type, falling back to static table", "instanceType", instanceType, "fallbackCards", cards)
+		c.cardCountCache.Set(instanceType, &cards)
+		return cards
+	}
+
+	cards := 1
+	if len(resp.InstanceTypes) > 0 {
+		info := resp.InstanceTypes[0]
+		if info.EbsInfo != nil && info.EbsInfo.MaximumEbsCards != nil && *info.EbsInfo.MaximumEbsCards > 1 {
+			cards = int(*info.EbsInfo.MaximumEbsCards)
+			klog.V(4).InfoS("Resolved EBS card count from API", "instanceType", instanceType, "cards", cards)
+		}
+	}
+
+	c.cardCountCache.Set(instanceType, &cards)
+	return cards
+}
+
 func (c *cloud) AttachDisk(ctx context.Context, volumeID, nodeID string) (string, error) {
 	if util.IsHyperPodNode(nodeID) {
 		return c.attachDiskHyperPod(ctx, volumeID, nodeID)
@@ -1249,7 +1283,8 @@ func (c *cloud) AttachDisk(ctx context.Context, volumeID, nodeID string) (string
 		c.likelyBadDeviceNames.Set(nodeID, likelyBadDeviceNames)
 	}
 
-	device, err := c.dm.NewDevice(instance, volumeID, likelyBadDeviceNames)
+	numCards := c.getCardCount(ctx, string(instance.InstanceType))
+	device, err := c.dm.NewDevice(instance, volumeID, likelyBadDeviceNames, numCards)
 	if err != nil {
 		return "", err
 	}

@@ -2154,13 +2154,14 @@ func TestAttachDisk(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name     string
-		volumeID string
-		nodeID   string
-		nodeID2  string
-		path     string
-		expErr   error
-		mockFunc func(*MockEC2API, context.Context, string, string, string, string, dm.DeviceManager)
+		name       string
+		volumeID   string
+		nodeID     string
+		nodeID2    string
+		path       string
+		expErr     error
+		cardCounts map[string]int // pre-populated card count cache entries
+		mockFunc   func(*MockEC2API, context.Context, string, string, string, string, dm.DeviceManager)
 	}{
 		{
 			name:     "success: AttachVolume normal",
@@ -2226,7 +2227,7 @@ func TestAttachDisk(t *testing.T) {
 				instanceRequest := createInstanceRequest(nodeID)
 
 				fakeInstance := newFakeInstance(nodeID, volumeID, path)
-				_, err := dm.NewDevice(&fakeInstance, volumeID, new(sync.Map))
+				_, err := dm.NewDevice(&fakeInstance, volumeID, new(sync.Map), 1)
 				require.NoError(t, err)
 
 				gomock.InOrder(
@@ -2347,11 +2348,12 @@ func TestAttachDisk(t *testing.T) {
 			},
 		},
 		{
-			name:     "success: AttachVolume with card index",
-			volumeID: defaultVolumeID,
-			nodeID:   defaultNodeID,
-			path:     defaultPath,
-			expErr:   nil,
+			name:       "success: AttachVolume with card index",
+			volumeID:   defaultVolumeID,
+			nodeID:     defaultNodeID,
+			path:       defaultPath,
+			expErr:     nil,
+			cardCounts: map[string]int{"r8gb.48xlarge": 2},
 			mockFunc: func(mockEC2 *MockEC2API, ctx context.Context, volumeID, nodeID, nodeID2, path string, dm dm.DeviceManager) {
 				instanceRequest := createInstanceRequest(nodeID)
 
@@ -2412,10 +2414,22 @@ func TestAttachDisk(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			mockCtrl := gomock.NewController(t)
 			mockEC2 := NewMockEC2API(mockCtrl)
+
+			// Non-HyperPod AttachDisk calls cloud.getCardCount → DescribeInstanceTypes.
+			// Default mock returns 1 card (no multi-card behavior).
+			mockEC2.EXPECT().DescribeInstanceTypes(testutil.AnyContext(), testutil.EC2Input(&ec2.DescribeInstanceTypesInput{})).Return(&ec2.DescribeInstanceTypesOutput{
+				InstanceTypes: []types.InstanceTypeInfo{{EbsInfo: &types.EbsInfo{}}},
+			}, nil).AnyTimes()
+
 			c := newCloud(mockEC2)
 			cloudInstance, ok := c.(*cloud)
 			if !ok {
 				t.Fatalf("could not assert c as type cloud, %v", c)
+			}
+
+			// Pre-populate card count cache for tests that need specific values
+			for instanceType, count := range tc.cardCounts {
+				cloudInstance.cardCountCache.Set(instanceType, &count)
 			}
 
 			ctx := t.Context()
@@ -5170,6 +5184,7 @@ func newCloud(mockEC2 util.EC2API) Cloud {
 		latestClientTokens:    expiringcache.New[string, int](cacheForgetDelay),
 		volumeInitializations: expiringcache.New[string, volumeInitialization](cacheForgetDelay),
 		latestIOPSLimits:      expiringcache.New[string, iopsLimits](iopsLimitCacheForgetDelay),
+		cardCountCache:        expiringcache.New[string, int](cacheForgetDelay),
 	}
 	return c
 }

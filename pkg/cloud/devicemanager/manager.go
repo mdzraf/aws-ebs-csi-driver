@@ -25,7 +25,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	"github.com/kubernetes-sigs/aws-ebs-csi-driver/pkg/cloud/limits"
 	"k8s.io/klog/v2"
 )
 
@@ -57,7 +56,8 @@ type DeviceManager interface {
 	// NewDevice retrieves the device if the device is already assigned.
 	// Otherwise it creates a new device with next available device name
 	// and mark it as unassigned device.
-	NewDevice(instance *types.Instance, volumeID string, likelyBadNames *sync.Map) (device *Device, err error)
+	// numCards is the number of EBS cards on the instance (1 for single-card instances).
+	NewDevice(instance *types.Instance, volumeID string, likelyBadNames *sync.Map, numCards int) (device *Device, err error)
 
 	// GetDevice returns the device already assigned to the volume.
 	GetDevice(instance *types.Instance, volumeID string) (device *Device, err error)
@@ -123,7 +123,7 @@ func NewDeviceManager() DeviceManager {
 	}
 }
 
-func (d *deviceManager) NewDevice(instance *types.Instance, volumeID string, likelyBadNames *sync.Map) (*Device, error) {
+func (d *deviceManager) NewDevice(instance *types.Instance, volumeID string, likelyBadNames *sync.Map, numCards int) (*Device, error) {
 	d.mux.Lock()
 	defer d.mux.Unlock()
 
@@ -151,9 +151,8 @@ func (d *deviceManager) NewDevice(instance *types.Instance, volumeID string, lik
 	}
 
 	// Calculate card index for new volume
-	instanceType := string(instance.InstanceType)
 	cardCounts := d.getCardCounts(instance)
-	cardIndex := getNextCardIndex(instanceType, cardCounts)
+	cardIndex := getNextCardIndex(numCards, cardCounts)
 
 	// Add the chosen device and volume to the "attachments in progress" map
 	d.inFlight.Add(nodeID, volumeID, name, cardIndex)
@@ -196,9 +195,7 @@ func (d *deviceManager) getCardCounts(instance *types.Instance) map[int32]int {
 // It implements a "least occupied" load balancing strategy.
 // Returns nil when the instance has only 1 card. For instances with multiple cards,
 // returns the card with the fewest volumes. When counts are equal, prefers lower card index.
-func getNextCardIndex(instanceType string, cardCounts map[int32]int) *int32 {
-	numCards := limits.GetCardCount(instanceType)
-
+func getNextCardIndex(numCards int, cardCounts map[int32]int) *int32 {
 	// If instance has only 1 card, return nil (no index needed)
 	if numCards <= 1 {
 		return nil

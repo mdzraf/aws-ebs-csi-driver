@@ -60,7 +60,7 @@ func TestNewDevice(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Should fail if instance is nil
-			dev1, err := dm.NewDevice(nil, tc.volumeID, new(sync.Map))
+			dev1, err := dm.NewDevice(nil, tc.volumeID, new(sync.Map), 1)
 			if err == nil {
 				t.Fatalf("Expected error when nil instance is passed in, got nothing")
 			}
@@ -71,11 +71,11 @@ func TestNewDevice(t *testing.T) {
 			fakeInstance := newFakeInstance(tc.instanceID, tc.existingVolumeID, tc.existingDevicePath)
 
 			// Should create valid Device with valid path
-			dev1, err = dm.NewDevice(fakeInstance, tc.volumeID, new(sync.Map))
+			dev1, err = dm.NewDevice(fakeInstance, tc.volumeID, new(sync.Map), 1)
 			assertDevice(t, dev1, false, err)
 
 			// Devices with same instance and volume should have same paths
-			dev2, err := dm.NewDevice(fakeInstance, tc.volumeID, new(sync.Map))
+			dev2, err := dm.NewDevice(fakeInstance, tc.volumeID, new(sync.Map), 1)
 			assertDevice(t, dev2, true /*IsAlreadyAssigned*/, err)
 			if dev1.Path != dev2.Path {
 				t.Fatalf("Expected equal paths, got %v and %v", dev1.Path, dev2.Path)
@@ -83,7 +83,7 @@ func TestNewDevice(t *testing.T) {
 
 			// Should create new Device with the same path after releasing
 			dev2.Release(false)
-			dev3, err := dm.NewDevice(fakeInstance, tc.volumeID, new(sync.Map))
+			dev3, err := dm.NewDevice(fakeInstance, tc.volumeID, new(sync.Map), 1)
 			assertDevice(t, dev3, false, err)
 			if dev3.Path != dev1.Path {
 				t.Fatalf("Expected equal paths, got %v and %v", dev1.Path, dev3.Path)
@@ -137,7 +137,7 @@ func TestNewDeviceWithExistingDevice(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			fakeInstance := newFakeInstance("fake-instance", tc.existingID, tc.existingPath)
 
-			dev, err := dm.NewDevice(fakeInstance, tc.volumeID, new(sync.Map))
+			dev, err := dm.NewDevice(fakeInstance, tc.volumeID, new(sync.Map), 1)
 			assertDevice(t, dev, tc.existingID == tc.volumeID, err)
 
 			if dev.Path != tc.expectedPath {
@@ -170,7 +170,7 @@ func TestGetDevice(t *testing.T) {
 			fakeInstance := newFakeInstance(tc.instanceID, tc.existingVolumeID, tc.existingDevicePath)
 
 			// Should create valid Device with valid path
-			dev1, err := dm.NewDevice(fakeInstance, tc.volumeID, new(sync.Map))
+			dev1, err := dm.NewDevice(fakeInstance, tc.volumeID, new(sync.Map), 1)
 			assertDevice(t, dev1, false /*IsAlreadyAssigned*/, err)
 
 			// Devices with same instance and volume should have same paths
@@ -206,7 +206,7 @@ func TestReleaseDevice(t *testing.T) {
 			fakeInstance := newFakeInstance(tc.instanceID, tc.existingVolumeID, tc.existingDevicePath)
 
 			// Should get assigned Device after releasing tainted device
-			dev, err := dm.NewDevice(fakeInstance, tc.volumeID, new(sync.Map))
+			dev, err := dm.NewDevice(fakeInstance, tc.volumeID, new(sync.Map), 1)
 			assertDevice(t, dev, false /*IsAlreadyAssigned*/, err)
 			dev.Taint()
 			dev.Release(false)
@@ -254,6 +254,7 @@ func TestNewDeviceWithCardIndex(t *testing.T) {
 		name              string
 		instance          *types.Instance
 		volumeID          string
+		numCards          int
 		expectedCardIndex *int32
 		isAlreadyAssigned bool
 	}{
@@ -272,6 +273,7 @@ func TestNewDeviceWithCardIndex(t *testing.T) {
 				},
 			},
 			volumeID:          "vol-2",
+			numCards:          1,
 			expectedCardIndex: nil,
 			isAlreadyAssigned: false,
 		},
@@ -292,6 +294,7 @@ func TestNewDeviceWithCardIndex(t *testing.T) {
 				},
 			},
 			volumeID:          "vol-2",
+			numCards:          2,
 			expectedCardIndex: aws.Int32(1), // Should pick card 1 (has fewer volumes)
 			isAlreadyAssigned: false,
 		},
@@ -312,6 +315,7 @@ func TestNewDeviceWithCardIndex(t *testing.T) {
 				},
 			},
 			volumeID:          "vol-1",
+			numCards:          2,
 			expectedCardIndex: aws.Int32(1),
 			isAlreadyAssigned: true,
 		},
@@ -346,6 +350,7 @@ func TestNewDeviceWithCardIndex(t *testing.T) {
 				},
 			},
 			volumeID:          "vol-4",
+			numCards:          2,
 			expectedCardIndex: aws.Int32(1), // Should pick card 1 (has fewer volumes)
 			isAlreadyAssigned: false,
 		},
@@ -370,6 +375,7 @@ func TestNewDeviceWithCardIndex(t *testing.T) {
 				},
 			},
 			volumeID:          "vol-3",
+			numCards:          2,
 			expectedCardIndex: aws.Int32(0), // Should pick card 0 (both have 0 volumes, picks lowest index)
 			isAlreadyAssigned: false,
 		},
@@ -378,7 +384,7 @@ func TestNewDeviceWithCardIndex(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			dm := NewDeviceManager()
-			device, err := dm.NewDevice(tc.instance, tc.volumeID, new(sync.Map))
+			device, err := dm.NewDevice(tc.instance, tc.volumeID, new(sync.Map), tc.numCards)
 			if err != nil {
 				t.Fatalf("Expected no error, got %v", err)
 			}
@@ -497,25 +503,25 @@ func TestGetDeviceWithCardIndex(t *testing.T) {
 func TestGetNextCardIndex(t *testing.T) {
 	testCases := []struct {
 		name              string
-		instanceType      string
+		numCards          int
 		cardCounts        map[int32]int
 		expectedCardIndex *int32
 	}{
 		{
 			name:              "single card instance returns nil",
-			instanceType:      "m5.large",
+			numCards:          1,
 			cardCounts:        map[int32]int{},
 			expectedCardIndex: nil,
 		},
 		{
 			name:              "multi-card instance with empty counts picks card 0",
-			instanceType:      "r8gb.48xlarge",
+			numCards:          2,
 			cardCounts:        map[int32]int{},
 			expectedCardIndex: aws.Int32(0),
 		},
 		{
-			name:         "multi-card instance picks card with fewer volumes",
-			instanceType: "r8gb.48xlarge",
+			name:     "multi-card instance picks card with fewer volumes",
+			numCards: 2,
 			cardCounts: map[int32]int{
 				0: 3,
 				1: 1,
@@ -523,8 +529,8 @@ func TestGetNextCardIndex(t *testing.T) {
 			expectedCardIndex: aws.Int32(1),
 		},
 		{
-			name:         "multi-card instance with equal counts picks lowest index",
-			instanceType: "r8gb.48xlarge",
+			name:     "multi-card instance with equal counts picks lowest index",
+			numCards: 2,
 			cardCounts: map[int32]int{
 				0: 2,
 				1: 2,
@@ -532,8 +538,8 @@ func TestGetNextCardIndex(t *testing.T) {
 			expectedCardIndex: aws.Int32(0),
 		},
 		{
-			name:         "multi-card instance with only one card populated",
-			instanceType: "r8gb.48xlarge",
+			name:     "multi-card instance with only one card populated",
+			numCards: 2,
 			cardCounts: map[int32]int{
 				0: 5,
 			},
@@ -543,7 +549,7 @@ func TestGetNextCardIndex(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := getNextCardIndex(tc.instanceType, tc.cardCounts)
+			result := getNextCardIndex(tc.numCards, tc.cardCounts)
 
 			if tc.expectedCardIndex == nil {
 				if result != nil {
@@ -665,7 +671,8 @@ func TestGetCardCounts(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dm := &deviceManager{
 				nameAllocator: &nameAllocator{},
-				inFlight:      make(inFlightAttaching),
+
+				inFlight: make(inFlightAttaching),
 			}
 
 			if tc.inflightSetup != nil {
@@ -691,6 +698,7 @@ func TestNewDeviceWithInflightCardIndex(t *testing.T) {
 	testCases := []struct {
 		name              string
 		instance          *types.Instance
+		numCards          int
 		volumeIDs         []string
 		expectedCardIndex []*int32
 	}{
@@ -701,6 +709,7 @@ func TestNewDeviceWithInflightCardIndex(t *testing.T) {
 				InstanceType:        "r8gb.48xlarge", // 2 cards
 				BlockDeviceMappings: []types.InstanceBlockDeviceMapping{},
 			},
+			numCards:  2,
 			volumeIDs: []string{"vol-1", "vol-2", "vol-3", "vol-4"},
 			// First goes to card 0, second to card 1, third to card 0, fourth to card 1
 			expectedCardIndex: []*int32{aws.Int32(0), aws.Int32(1), aws.Int32(0), aws.Int32(1)},
@@ -720,6 +729,7 @@ func TestNewDeviceWithInflightCardIndex(t *testing.T) {
 					},
 				},
 			},
+			numCards:  2,
 			volumeIDs: []string{"vol-1", "vol-2"},
 			// Card 0 has 1 volume, so first new volume goes to card 1, then card 0
 			expectedCardIndex: []*int32{aws.Int32(1), aws.Int32(0)},
@@ -731,7 +741,7 @@ func TestNewDeviceWithInflightCardIndex(t *testing.T) {
 			dm := NewDeviceManager()
 
 			for i, volumeID := range tc.volumeIDs {
-				device, err := dm.NewDevice(tc.instance, volumeID, new(sync.Map))
+				device, err := dm.NewDevice(tc.instance, volumeID, new(sync.Map), tc.numCards)
 				if err != nil {
 					t.Fatalf("Expected no error for volume %s, got %v", volumeID, err)
 				}
