@@ -229,6 +229,9 @@ func parseModifyVolumeParameters(params map[string]string) (*modifyVolumeRequest
 			case strings.HasPrefix(key, ModificationAddTag):
 				rawTagsToAdd = append(rawTagsToAdd, value)
 			case strings.HasPrefix(key, ModificationDeleteTag):
+				if err := validateExtraTags(map[string]string{value: ""}, false); err != nil {
+					return nil, status.Errorf(codes.InvalidArgument, "Cannot delete reserved tag: %v", err)
+				}
 				options.modifyTagsOptions.TagsToDelete = append(options.modifyTagsOptions.TagsToDelete, value)
 			default:
 				return nil, status.Errorf(codes.InvalidArgument, "Invalid mutable parameter key: %s", key)

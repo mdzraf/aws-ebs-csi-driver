@@ -251,6 +251,39 @@ func TestParseModifyVolumeParameters(t *testing.T) {
 			},
 			expectError: true,
 		},
+		{
+			name: "delete reserved tag CSIVolumeName",
+			params: map[string]string{
+				ModificationDeleteTag + "_1": "CSIVolumeName",
+			},
+			expectError: true,
+		},
+		{
+			name: "delete reserved tag ebs.csi.aws.com/cluster",
+			params: map[string]string{
+				ModificationDeleteTag + "_1": cloud.AwsEbsDriverTagKey,
+			},
+			expectError: true,
+		},
+		{
+			name: "delete reserved tag with kubernetes.io prefix",
+			params: map[string]string{
+				ModificationDeleteTag + "_1": "kubernetes.io/created-for/pvc/name",
+			},
+			expectError: true,
+		},
+		{
+			name: "delete non-reserved tag succeeds",
+			params: map[string]string{
+				ModificationDeleteTag + "_1": "my-custom-tag",
+			},
+			expectedOptions: &modifyVolumeRequest{
+				modifyTagsOptions: cloud.ModifyTagsOptions{
+					TagsToAdd:    map[string]string{},
+					TagsToDelete: []string{"my-custom-tag"},
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
