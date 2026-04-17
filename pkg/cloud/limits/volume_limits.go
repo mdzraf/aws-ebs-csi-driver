@@ -43,6 +43,10 @@ var dedicatedInstances = map[string]struct{}{
 	"i8g.metal-48xl":  {},
 	"m8gb.metal-24xl": {},
 	"m8gn.metal-24xl": {},
+	"c8in.metal-48xl": {},
+	"c8in.metal-96xl": {},
+	"c8ib.metal-48xl": {},
+	"c8ib.metal-96xl": {},
 }
 
 // GetVolumeLimits returns the volume limit and attachment type for a given instance type.
