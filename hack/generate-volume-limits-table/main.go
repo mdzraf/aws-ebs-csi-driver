@@ -22,7 +22,6 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/kubernetes-sigs/aws-ebs-csi-driver/pkg/util"
@@ -108,14 +107,6 @@ func getInstanceTypesForRegion(ctx context.Context, region string) (map[string]i
 	instances := make(map[string]instanceData)
 	paginator := ec2.NewDescribeInstanceTypesPaginator(ec2Client, &ec2.DescribeInstanceTypesInput{})
 
-	type instanceOverride struct {
-		maxAttachments *int32
-		maxEbsCards    *int32
-	}
-	wrongLimitInstances := map[string]instanceOverride{
-		"c8gn.48xlarge": {maxAttachments: aws.Int32(64), maxEbsCards: aws.Int32(1)},
-	}
-
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
 		if err != nil {
@@ -175,6 +166,10 @@ func main() {
 	allInstances := make(map[string]instanceData)
 
 	for _, region := range regions {
+		if _, skip := skipRegions[region]; skip {
+			log.Printf("Skipping region %s", region)
+			continue
+		}
 		log.Printf("Getting volume limits for %s...", region)
 
 		instances, err := getInstanceTypesForRegion(ctx, region)
