@@ -54,9 +54,17 @@ To enable this metadata source:
 > [!NOTE]  
 > The example policy and documentation below use the [`aws` partition in ARNs](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference-arns.html). When installing the EBS CSI Driver on other partitions, replace instances of `arn:aws:` with the local partition, such as `arn:aws-us-gov:` for AWS GovCloud.
 
-The driver requires IAM permissions to talk to Amazon EBS to manage the volume on user's behalf. [The example policy here](./example-iam-policy.json) defines these permissions. AWS maintains a [managed policy version of the example policy](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AmazonEBSCSIDriverPolicy.html), available at ARN `arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy`.
+The driver requires IAM permissions to talk to Amazon EBS to manage the volume on user's behalf. [The example policy here](./AmazonEBSCSIDriverPolicyV2.json) defines these permissions. AWS maintains a [managed policy version of the example policy](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AmazonEBSCSIDriverPolicyV2.html), available at ARN `arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicyV2`.
 
-The baseline example policy excludes permissions for some rarer and potentially dangerous usecases. For these usecases, additional statements are necessary:
+The baseline example policy scopes permissions to volumes and snapshots crated by the EBS CSI Driver. Review the following if this affects your workflow:
+
+<details>
+<summary>Static provisioning (importing externally-created volumes or snapshots)</summary>
+<br>
+<code>AmazonEBSCSIDriverPolicyV2</code> scopes permissions to volumes and snapshots tagged with <code>ebs.csi.aws.com/cluster: true</code>. The driver automatically applies this tag to dynamically provisioned resources. If you use <a href="https://github.com/kubernetes-sigs/aws-ebs-csi-driver/tree/master/examples/kubernetes/static-provisioning">static provisioning</a> (i.e. importing externally-created EBS volumes or snapshots), you must manually tag those resources with <code>ebs.csi.aws.com/cluster: true</code> for the driver to manage them. For more details, see <a href="https://github.com/kubernetes-sigs/aws-ebs-csi-driver/issues/2918">the announcement</a>.
+</details>
+
+The baseline example policy also excludes permissions for some rarer and potentially dangerous usecases. For these usecases, additional statements are necessary:
 
 <details>
 <summary>Encrypted EBS Volumes via KMS</summary>
