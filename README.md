@@ -23,6 +23,14 @@ The [Amazon Elastic Block Store](https://aws.amazon.com/ebs/) Container Storage 
 | v1.62.0        | registry.k8s.io/provider-aws/aws-ebs-csi-driver:v1.62.0                                           | public.ecr.aws/ebs-csi-driver/aws-ebs-csi-driver:v1.62.0                      |
 | v1.61.1        | registry.k8s.io/provider-aws/aws-ebs-csi-driver:v1.61.1                                           | public.ecr.aws/ebs-csi-driver/aws-ebs-csi-driver:v1.61.1                      |
 
+## Helm Charts
+
+The Helm chart is published through the GitHub Pages Helm repository and as an OCI artifact in both public registries.
+
+| Chart Version | [registry.k8s.io](https://kubernetes.io/blog/2022/11/28/registry-k8s-io-faster-cheaper-ga/) Chart | [ECR Public](https://gallery.ecr.aws/ebs-csi-driver/charts/aws-ebs-csi-driver) Chart |
+|---------------|---------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------|
+| 2.62.0        | registry.k8s.io/provider-aws/charts/aws-ebs-csi-driver:2.62.0                                     | public.ecr.aws/ebs-csi-driver/charts/aws-ebs-csi-driver:2.62.0                       |
+
 ## Releases
 
 The EBS CSI Driver publishes monthly releases. Unscheduled releases may be published for patches to security vulnerabilities and other fixes deemed urgent.
