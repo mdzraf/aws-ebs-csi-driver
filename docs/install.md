@@ -156,17 +156,30 @@ kubectl apply -k "github.com/kubernetes-sigs/aws-ebs-csi-driver/deploy/kubernete
 *Note: Using the master branch to deploy the driver is not supported as the master branch may contain upcoming features incompatible with the currently released stable version of the driver.*
 
 #### Helm
-- Add the `aws-ebs-csi-driver` Helm repository.
+Install from the GitHub Pages Helm repository:
 ```sh
 helm repo add aws-ebs-csi-driver https://kubernetes-sigs.github.io/aws-ebs-csi-driver
 helm repo update
-```
 
-- Install the latest release of the driver.
-```sh
 helm upgrade --install aws-ebs-csi-driver \
     --namespace kube-system \
     aws-ebs-csi-driver/aws-ebs-csi-driver
+```
+
+Install from registry.k8s.io:
+```sh
+helm upgrade --install aws-ebs-csi-driver \
+    --namespace kube-system \
+    oci://registry.k8s.io/provider-aws/charts/aws-ebs-csi-driver \
+    --version 2.62.0
+```
+
+Install from ECR Public:
+```sh
+helm upgrade --install aws-ebs-csi-driver \
+    --namespace kube-system \
+    oci://public.ecr.aws/ebs-csi-driver/charts/aws-ebs-csi-driver \
+    --version 2.62.0
 ```
 
 Review the [configuration values](https://github.com/kubernetes-sigs/aws-ebs-csi-driver/blob/master/charts/aws-ebs-csi-driver/values.yaml) for the Helm chart.
