@@ -65,6 +65,12 @@ func (modifyVolumeTest *ModifyVolumeTest) Run(c clientset.Interface, ns *v1.Name
 	defer formatOptionMountPod.Cleanup()
 	formatOptionMountPod.WaitForRunning()
 
+	// The default binding mode is WaitForFirstConsumer, so the PVC only binds
+	// once the pod above is scheduled. Resolve the bound PV now that the pod is
+	// running, since the modification/resize assertions below reference it.
+	testVolume.WaitForBound()
+	testVolume.ValidateProvisionedPersistentVolume()
+
 	if modifyVolumeTest.ShouldTestInvalidModificationRecovery {
 		By("modifying the pvc with invalid annotations")
 		attemptInvalidModification(c, ns, testVolume)

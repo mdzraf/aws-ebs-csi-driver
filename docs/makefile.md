@@ -201,13 +201,9 @@ Alternatively, you may run on an externally created cluster by passing `CLUSTER_
 
 Run the Kubernetes upstream [external storage E2E tests](https://github.com/kubernetes/kubernetes/blob/master/test/e2e/README.md). This is the most comprehensive E2E test, recommended for local development.
 
-### `make e2e/single-az`
+### `make e2e/functional`
 
-Run the single-AZ EBS CSI E2E tests. Requires a cluster with only one Availability Zone.
-
-### `make e2e/multi-az`
-
-Run the multi-AZ EBS CSI E2E tests. Requires a cluster with at least two Availability Zones.
+Run the EBS CSI functional E2E tests (the `[functional]` labeled specs) against a single multi-AZ cluster. `AWS_AVAILABILITY_ZONES` is derived automatically from the cluster's worker nodes. The multi-attach specs pin their volume to the first AZ and place two pods on different nodes sharing it, so that AZ must contain at least two worker nodes (e.g. create the cluster with `NODE_COUNT=4` across 3 AZs).
 
 ### `make e2e/external-windows`
 

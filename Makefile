@@ -140,21 +140,38 @@ e2e/parameters: bin/helm bin/ginkgo
 e2e/parameters-all: bin/helm bin/ginkgo test/helm-template
 	./hack/e2e/param-sets.sh run-all
 
-.PHONY: e2e/single-az
-e2e/single-az: bin/helm bin/ginkgo
-	AWS_AVAILABILITY_ZONES=us-west-2a \
+# e2e/functional runs the EBS CSI functional suite (the [functional] labeled
+# specs) against a single multi-AZ cluster. The focus matches [functional] only
+# and deliberately excludes the [param:...] specs, which are a separate suite
+# run via `make e2e/parameters` with per-parameter Helm configuration. run.sh
+# derives AWS_AVAILABILITY_ZONES from the cluster's worker nodes so
+# topology-dependent tests target real AZs.
+#
+# NOTE: the multi-attach specs place two pods on different nodes sharing one
+# AZ-local volume, so they need an AZ with at least two schedulable worker
+# nodes. They detect such an AZ at runtime and fail if none exists. On the
+# default kops path, NODE_COUNT=4 across 3 AZs gives one AZ two nodes; see
+# hack/e2e/config.sh and hack/prow-e2e.sh.
+.PHONY: e2e/functional
+e2e/functional: bin/helm bin/ginkgo
 	TEST_PATH=./tests/e2e/... \
-	GINKGO_FOCUS="\[ebs-csi-e2e\] \[single-az\]" \
+	GINKGO_FOCUS="\[ebs-csi-e2e\] \[functional\]" \
 	GINKGO_PARALLEL=5 \
 	HELM_EXTRA_FLAGS="--set=controller.volumeModificationFeature.enabled=true,sidecars.provisioner.additionalArgs[0]='--feature-gates=VolumeAttributesClass=true',sidecars.resizer.additionalArgs[0]='--feature-gates=VolumeAttributesClass=true',node.enableMetrics=true" \
 	./hack/e2e/run.sh
 
+# e2e/single-az and e2e/multi-az are deprecated: the single-az and multi-az
+# suites have been merged into the [functional] suite (make e2e/functional).
+# These targets are kept temporarily so existing test-infra jobs keep working
+# until they are migrated to e2e/functional, after which these will be removed.
+# e2e/single-az delegates to e2e/functional; e2e/multi-az is a no-op because its
+# coverage is now part of e2e/functional.
+.PHONY: e2e/single-az
+e2e/single-az: e2e/functional
+
 .PHONY: e2e/multi-az
-e2e/multi-az: bin/helm bin/ginkgo
-	TEST_PATH=./tests/e2e/... \
-	GINKGO_FOCUS="\[ebs-csi-e2e\] \[multi-az\]" \
-	GINKGO_PARALLEL=5 \
-	./hack/e2e/run.sh
+e2e/multi-az:
+	@echo "e2e/multi-az is a no-op: its tests are now bundled into e2e/functional and this target will soon be removed."
 
 .PHONY: e2e/disruptive
 e2e/disruptive: bin/helm bin/ginkgo

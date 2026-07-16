@@ -31,7 +31,7 @@ export AWS_REGION=${AWS_REGION:-${REGION_FROM_CONFIG:-us-west-2}}
 # If zones are not provided, auto-detect the first 3 AZs that are not opt in
 ZONES=${AWS_AVAILABILITY_ZONES:-$(${BIN}/aws ec2 describe-availability-zones --region "${AWS_REGION}" | jq -r '[.AvailabilityZones[] | select(.OptInStatus == "opt-in-not-required") | .ZoneName][:3] | join(",")')}
 FIRST_ZONE=$(echo "${ZONES}" | cut -d, -f1)
-NODE_COUNT=${NODE_COUNT:-3}
+NODE_COUNT=${NODE_COUNT:-4}
 INSTANCE_TYPE=${INSTANCE_TYPE:-c5.large}
 WINDOWS=${WINDOWS:-"false"}
 AMI_FAMILY=${AMI_FAMILY:-"AmazonLinux2023"}

@@ -22,12 +22,27 @@
 make bin/aws
 
 case ${1} in
-test-e2e-single-az)
-  TEST="single-az"
-  export AWS_AVAILABILITY_ZONES="us-west-2a"
+test-e2e-functional | test-e2e-single-az)
+  # test-e2e-single-az is deprecated and now runs the merged [functional] suite
+  # (which includes the former single-az and multi-az specs). It is kept until
+  # the test-infra jobs migrate to test-e2e-functional, then it will be removed.
+  TEST="functional"
+  # Multi-AZ cluster: leave AWS_AVAILABILITY_ZONES unset so config.sh
+  # auto-detects the first 3 AZs. The multi-attach specs need an AZ with at
+  # least two schedulable worker nodes (they place two pods on different nodes
+  # sharing one AZ-local volume); they detect such an AZ at runtime and fail if
+  # none exists. NODE_COUNT=4 across 3 AZs gives one AZ two nodes on the default
+  # kops path (kops.sh passes --node-count). NOTE: this only takes effect for
+  # kops; the eksctl path uses a fixed desiredCapacity in cluster.yaml and
+  # ignores NODE_COUNT.
+  export NODE_COUNT="${NODE_COUNT:-4}"
   ;;
 test-e2e-multi-az)
-  TEST="multi-az"
+  # No-op: the multi-az tests are now bundled into the [functional] suite
+  # (test-e2e-functional) and this job will soon be removed. Exit before
+  # creating a cluster so no AWS resources are consumed.
+  echo "test-e2e-multi-az is a no-op: its tests are now bundled into test-e2e-functional and this job will soon be removed."
+  exit 0
   ;;
 test-e2e-disruptive)
   TEST="disruptive"

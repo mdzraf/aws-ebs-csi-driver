@@ -45,6 +45,7 @@ type VolumeDetails struct {
 	CreateVolumeParameters     map[string]string // Optional, used when dynamically-provisioned volumes
 	VolumeID                   string            // Optional, used with pre-provisioned volumes
 	PreProvisionedVolumeFsType string            // Optional, used with pre-provisioned volumes
+	AvailabilityZone           string            // Optional, used with pre-provisioned volumes to set PV node affinity
 	DataSource                 *DataSource       // Optional, used with PVCs created from snapshots
 }
 
@@ -163,8 +164,11 @@ func (volume *VolumeDetails) SetupDynamicPersistentVolumeClaim(client clientset.
 	}
 	tpvc.Create()
 	cleanupFuncs = append(cleanupFuncs, tpvc.Cleanup)
-	// PV will not be ready until PVC is used in a pod when volumeBindingMode: WaitForFirstConsumer
-	if volume.VolumeBindingMode == nil || *volume.VolumeBindingMode == storagev1.VolumeBindingImmediate {
+	// With WaitForFirstConsumer (the default binding mode, see
+	// getStorageClass), the PV is not provisioned or bound until a pod
+	// consumes the PVC, so only wait for binding here when Immediate binding
+	// is explicitly requested.
+	if volume.VolumeBindingMode != nil && *volume.VolumeBindingMode == storagev1.VolumeBindingImmediate {
 		tpvc.WaitForBound()
 		tpvc.ValidateProvisionedPersistentVolume()
 	}
@@ -179,7 +183,7 @@ func (volume *VolumeDetails) SetupPreProvisionedPersistentVolumeClaim(client cli
 		volumeMode = v1.PersistentVolumeBlock
 	}
 	By("setting up the PV")
-	pv := csiDriver.GetPersistentVolume(volume.VolumeID, volume.PreProvisionedVolumeFsType, volume.ClaimSize, volume.ReclaimPolicy, namespace.Name, volume.AccessMode, volumeMode)
+	pv := csiDriver.GetPersistentVolume(volume.VolumeID, volume.PreProvisionedVolumeFsType, volume.ClaimSize, volume.ReclaimPolicy, namespace.Name, volume.AccessMode, volumeMode, volume.AvailabilityZone)
 	tpv := NewTestPreProvisionedPersistentVolume(client, pv)
 	tpv.Create()
 	By("setting up the PVC")

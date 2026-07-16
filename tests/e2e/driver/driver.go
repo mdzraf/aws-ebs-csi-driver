@@ -40,8 +40,11 @@ type DynamicPVTestDriver interface {
 
 // PreProvisionedVolumeTestDriver represents an interface for a CSI driver that supports pre-provisioned volume.
 type PreProvisionedVolumeTestDriver interface {
-	// GetPersistentVolume returns a PersistentVolume with pre-provisioned volumeHandle
-	GetPersistentVolume(volumeID string, fsType string, size string, reclaimPolicy *v1.PersistentVolumeReclaimPolicy, namespace string, accessMode v1.PersistentVolumeAccessMode, volumeMode v1.PersistentVolumeMode) *v1.PersistentVolume
+	// GetPersistentVolume returns a PersistentVolume with pre-provisioned volumeHandle.
+	// availabilityZone, when non-empty, is set as node affinity on the PV so the
+	// consuming pod is scheduled in the same AZ as the pre-provisioned volume
+	// (required on multi-AZ clusters).
+	GetPersistentVolume(volumeID string, fsType string, size string, reclaimPolicy *v1.PersistentVolumeReclaimPolicy, namespace string, accessMode v1.PersistentVolumeAccessMode, volumeMode v1.PersistentVolumeMode, availabilityZone string) *v1.PersistentVolume
 }
 
 type VolumeSnapshotTestDriver interface {
@@ -63,7 +66,14 @@ func getStorageClass(
 		reclaimPolicy = &defaultReclaimPolicy
 	}
 	if bindingMode == nil {
-		defaultBindingMode := storagev1.VolumeBindingImmediate
+		// Default to WaitForFirstConsumer so that dynamically provisioned
+		// volumes are created in the same availability zone as the pod that
+		// consumes them. This lets the suite run against a multi-AZ cluster:
+		// with Immediate binding a volume can be provisioned in a different AZ
+		// than its pod, leaving the pod unschedulable. Tests that specifically
+		// exercise Immediate binding (e.g. the reclaim-policy tests, which
+		// provision a PV without a consuming pod) set it explicitly.
+		defaultBindingMode := storagev1.VolumeBindingWaitForFirstConsumer
 		bindingMode = &defaultBindingMode
 	}
 	return &storagev1.StorageClass{

@@ -68,7 +68,7 @@ func (d *ebsCSIDriver) GetVolumeSnapshotClass(namespace string, parameters map[s
 	return getVolumeSnapshotClass(generateName, provisioner, parameters)
 }
 
-func (d *ebsCSIDriver) GetPersistentVolume(volumeID string, fsType string, size string, reclaimPolicy *v1.PersistentVolumeReclaimPolicy, namespace string, accessMode v1.PersistentVolumeAccessMode, volumeMode v1.PersistentVolumeMode) *v1.PersistentVolume {
+func (d *ebsCSIDriver) GetPersistentVolume(volumeID string, fsType string, size string, reclaimPolicy *v1.PersistentVolumeReclaimPolicy, namespace string, accessMode v1.PersistentVolumeAccessMode, volumeMode v1.PersistentVolumeMode, availabilityZone string) *v1.PersistentVolume {
 	provisioner := d.driverName
 	generateName := fmt.Sprintf("%s-%s-preprovsioned-pv-", namespace, provisioner)
 	// Default to Retain ReclaimPolicy for pre-provisioned volumes
@@ -81,7 +81,7 @@ func (d *ebsCSIDriver) GetPersistentVolume(volumeID string, fsType string, size 
 		accessMode = v1.ReadWriteOnce
 	}
 
-	return &v1.PersistentVolume{
+	pv := &v1.PersistentVolume{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: generateName,
 			Namespace:    namespace,
@@ -106,6 +106,30 @@ func (d *ebsCSIDriver) GetPersistentVolume(volumeID string, fsType string, size 
 			VolumeMode: &volumeMode,
 		},
 	}
+
+	// Pin the PV to the AZ the pre-provisioned volume was created in. Without
+	// this, on a multi-AZ cluster the consuming pod may be scheduled in a
+	// different AZ than the EBS volume, so the volume can never attach and the
+	// pod hangs in ContainerCreating.
+	if availabilityZone != "" {
+		pv.Spec.NodeAffinity = &v1.VolumeNodeAffinity{
+			Required: &v1.NodeSelector{
+				NodeSelectorTerms: []v1.NodeSelectorTerm{
+					{
+						MatchExpressions: []v1.NodeSelectorRequirement{
+							{
+								Key:      ebscsidriver.WellKnownZoneTopologyKey,
+								Operator: v1.NodeSelectorOpIn,
+								Values:   []string{availabilityZone},
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+
+	return pv
 }
 
 // MinimumSizeForVolumeType returns the minimum disk size for each volumeType.

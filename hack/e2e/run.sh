@@ -41,20 +41,28 @@ else
   exit 1
 fi
 
-# Fail single-az tests early if we know cluster is multi-az.
-IGNORE_SINGLE_AZ_ERR=${IGNORE_SINGLE_AZ_ERR:="false"}
-if [[ $IGNORE_SINGLE_AZ_ERR != "true" && "$GINKGO_FOCUS" =~ "single-az" ]]; then
-  # Get unique AZs of non-control-plane nodes
-  azs=$(kubectl get nodes \
+# The ebs-csi-e2e suite runs against a multi-AZ cluster. Tests that read
+# AWS_AVAILABILITY_ZONES (pre-provisioned volumes, topology-aware scheduling,
+# multi-attach AZ pinning) need it to reflect the AZs the cluster's worker
+# nodes actually run in, so volumes are created only in AZs that have a node
+# available to attach them. If the caller didn't pin it, derive it from the
+# live worker nodes.
+if [[ -z "${AWS_AVAILABILITY_ZONES:-}" ]]; then
+  AWS_AVAILABILITY_ZONES=$(kubectl get nodes \
     --kubeconfig "${KUBECONFIG}" \
     --selector '!node-role.kubernetes.io/control-plane' \
-    -o jsonpath='{.items[*].metadata.labels.topology\.kubernetes\.io/zone}' | tr " " "\n" | sort -u)
-
-  # Check if there's exactly one AZ and it matches $AWS_AVAILABILITY_ZONES
-  if [[ $(echo "$azs" | wc -w) -gt 1 ]] || [[ "$azs" != "$AWS_AVAILABILITY_ZONES" ]]; then
-    loudecho "ERROR. single-az tests require all worker nodes to be in a single availability zone (AZ) that matches env var \$AWS_AVAILABILITY_ZONES (Currently set as \"$AWS_AVAILABILITY_ZONES\"). Please delete nodes in other AZs. If you want to bypass this error, set env var IGNORE_SINGLE_AZ_ERR='true'"
+    -o jsonpath='{.items[*].metadata.labels.topology\.kubernetes\.io/zone}' | tr " " "\n" | sort -u | paste -sd, -)
+  # Fail fast if the derivation produced nothing (e.g. nodes not yet labeled
+  # with topology.kubernetes.io/zone, wrong KUBECONFIG, or the selector
+  # excluded every node). Otherwise AWS_AVAILABILITY_ZONES would be exported
+  # empty and every [env]-gated test (pre-provisioned, topology-aware) would
+  # silently Skip, letting the suite report success without running them.
+  if [[ -z "${AWS_AVAILABILITY_ZONES}" ]]; then
+    loudecho "ERROR. Could not derive AWS_AVAILABILITY_ZONES from cluster worker nodes. Ensure the cluster has worker nodes labeled with topology.kubernetes.io/zone and that KUBECONFIG points at it, or set AWS_AVAILABILITY_ZONES explicitly."
     exit 1
   fi
+  export AWS_AVAILABILITY_ZONES
+  loudecho "Derived AWS_AVAILABILITY_ZONES from cluster worker nodes: ${AWS_AVAILABILITY_ZONES}"
 fi
 
 if [[ "$WINDOWS" == true ]]; then

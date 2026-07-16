@@ -38,6 +38,12 @@ func (t *DynamicallyProvisionedVolumePropertiesTest) Run(c clientset.Interface, 
 	defer pod.Cleanup()
 	pod.WaitForSuccess()
 
+	// The default binding mode is WaitForFirstConsumer, so the PVC only binds
+	// once the pod above is scheduled. Now that the pod has run, resolve the
+	// bound PV before reading its properties.
+	testVolume.WaitForBound()
+	testVolume.ValidateProvisionedPersistentVolume()
+
 	By("verifying volume properties")
 	volumeID := testVolume.persistentVolume.Spec.CSI.VolumeHandle
 

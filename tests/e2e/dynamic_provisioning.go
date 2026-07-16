@@ -15,6 +15,7 @@ limitations under the License.
 package e2e
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"os"
@@ -27,6 +28,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	v1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -36,7 +38,7 @@ import (
 	admissionapi "k8s.io/pod-security-admission/api"
 )
 
-var _ = Describe("[ebs-csi-e2e] [single-az] Dynamic Provisioning", func() {
+var _ = Describe("[ebs-csi-e2e] [functional] Dynamic Provisioning", func() {
 	f := framework.NewDefaultFramework("ebs")
 	f.NamespacePodSecurityEnforceLevel = admissionapi.LevelPrivileged
 
@@ -267,7 +269,12 @@ var _ = Describe("[ebs-csi-e2e] [single-az] Dynamic Provisioning", func() {
 	})
 
 	It("should succeed multi-attach with dynamically provisioned IO2 block device", func() {
+		zone := multiAttachZone(cs)
+		if zone == "" {
+			Fail("no availability zone has two or more schedulable worker nodes; multi-attach requires a cluster with at least two nodes in one AZ")
+		}
 		volumeBindingMode := storagev1.VolumeBindingWaitForFirstConsumer
+		allowedTopologyValues := []string{zone}
 		pods := []testsuites.PodDetails{
 			{
 				Volumes: []testsuites.VolumeDetails{
@@ -282,8 +289,9 @@ var _ = Describe("[ebs-csi-e2e] [single-az] Dynamic Provisioning", func() {
 							NameGenerate: "test-block-volume-",
 							DevicePath:   "/dev/xvda",
 						},
-						AccessMode:        v1.ReadWriteMany,
-						VolumeBindingMode: &volumeBindingMode,
+						AccessMode:            v1.ReadWriteMany,
+						VolumeBindingMode:     &volumeBindingMode,
+						AllowedTopologyValues: allowedTopologyValues,
 					},
 				},
 			},
@@ -586,14 +594,18 @@ var _ = Describe("[ebs-csi-e2e] [single-az] Dynamic Provisioning", func() {
 
 	It(fmt.Sprintf("should delete PV with reclaimPolicy %q", v1.PersistentVolumeReclaimDelete), func() {
 		reclaimPolicy := v1.PersistentVolumeReclaimDelete
+		// This test provisions a PV without a consuming pod, so it uses Immediate binding.
+		// No allowedTopologies is needed since no pod schedules against the volume.
+		volumeBindingMode := storagev1.VolumeBindingImmediate
 		volumes := []testsuites.VolumeDetails{
 			{
 				CreateVolumeParameters: map[string]string{
 					ebscsidriver.VolumeTypeKey: awscloud.VolumeTypeGP2,
 					ebscsidriver.FSTypeKey:     ebscsidriver.FSTypeExt4,
 				},
-				ClaimSize:     driver.MinimumSizeForVolumeType(awscloud.VolumeTypeGP2),
-				ReclaimPolicy: &reclaimPolicy,
+				ClaimSize:         driver.MinimumSizeForVolumeType(awscloud.VolumeTypeGP2),
+				ReclaimPolicy:     &reclaimPolicy,
+				VolumeBindingMode: &volumeBindingMode,
 			},
 		}
 		test := testsuites.DynamicallyProvisionedReclaimPolicyTest{
@@ -608,19 +620,23 @@ var _ = Describe("[ebs-csi-e2e] [single-az] Dynamic Provisioning", func() {
 			Skip(fmt.Sprintf("env %q not set", awsAvailabilityZonesEnv))
 		}
 		reclaimPolicy := v1.PersistentVolumeReclaimRetain
+		availabilityZones := strings.Split(os.Getenv(awsAvailabilityZonesEnv), ",")
+		availabilityZone := availabilityZones[rand.Intn(len(availabilityZones))]
+		region := availabilityZone[0 : len(availabilityZone)-1]
+		// This test provisions a PV without a consuming pod, so it uses
+		// Immediate binding.
+		volumeBindingMode := storagev1.VolumeBindingImmediate
 		volumes := []testsuites.VolumeDetails{
 			{
 				CreateVolumeParameters: map[string]string{
 					ebscsidriver.VolumeTypeKey: awscloud.VolumeTypeGP2,
 					ebscsidriver.FSTypeKey:     ebscsidriver.FSTypeExt4,
 				},
-				ClaimSize:     driver.MinimumSizeForVolumeType(awscloud.VolumeTypeGP2),
-				ReclaimPolicy: &reclaimPolicy,
+				ClaimSize:         driver.MinimumSizeForVolumeType(awscloud.VolumeTypeGP2),
+				ReclaimPolicy:     &reclaimPolicy,
+				VolumeBindingMode: &volumeBindingMode,
 			},
 		}
-		availabilityZones := strings.Split(os.Getenv(awsAvailabilityZonesEnv), ",")
-		availabilityZone := availabilityZones[rand.Intn(len(availabilityZones))]
-		region := availabilityZone[0 : len(availabilityZone)-1]
 		cloud := awscloud.NewCloud(region, false, "", true, false)
 
 		test := testsuites.DynamicallyProvisionedReclaimPolicyTest{
@@ -632,6 +648,9 @@ var _ = Describe("[ebs-csi-e2e] [single-az] Dynamic Provisioning", func() {
 	})
 
 	It("should create a deployment object, write and read to it, delete the pod and write and read to it again", func() {
+		// SetupDeployment provisions and waits for the PVC to bind before the
+		// deployment's pod exists, so this test needs Immediate binding.
+		volumeBindingMode := storagev1.VolumeBindingImmediate
 		pod := testsuites.PodDetails{
 			Cmd: "echo 'hello world' >> /mnt/test-1/data && while true; do sleep 1; done",
 			Volumes: []testsuites.VolumeDetails{
@@ -645,6 +664,7 @@ var _ = Describe("[ebs-csi-e2e] [single-az] Dynamic Provisioning", func() {
 						NameGenerate:      "test-volume-",
 						MountPathGenerate: "/mnt/test-",
 					},
+					VolumeBindingMode: &volumeBindingMode,
 				},
 			},
 		}
@@ -661,6 +681,9 @@ var _ = Describe("[ebs-csi-e2e] [single-az] Dynamic Provisioning", func() {
 
 	It("should create a volume on demand and resize it", func() {
 		allowVolumeExpansion := true
+		// This test resizes the PVC before a pod consumes it, so the volume
+		// must be provisioned and bound up front.
+		volumeBindingMode := storagev1.VolumeBindingImmediate
 		pod := testsuites.PodDetails{
 			Cmd: "echo 'hello world' >> /mnt/test-1/data && grep 'hello world' /mnt/test-1/data && sync",
 			Volumes: []testsuites.VolumeDetails{
@@ -675,6 +698,7 @@ var _ = Describe("[ebs-csi-e2e] [single-az] Dynamic Provisioning", func() {
 						MountPathGenerate: "/mnt/test-",
 					},
 					AllowVolumeExpansion: &allowVolumeExpansion,
+					VolumeBindingMode:    &volumeBindingMode,
 				},
 			},
 		}
@@ -686,7 +710,7 @@ var _ = Describe("[ebs-csi-e2e] [single-az] Dynamic Provisioning", func() {
 	})
 })
 
-var _ = Describe("[ebs-csi-e2e] [single-az] Snapshot", func() {
+var _ = Describe("[ebs-csi-e2e] [functional] Snapshot", func() {
 	f := framework.NewDefaultFramework("ebs")
 	f.NamespacePodSecurityEnforceLevel = admissionapi.LevelPrivileged
 
@@ -751,7 +775,7 @@ var _ = Describe("[ebs-csi-e2e] [single-az] Snapshot", func() {
 	})
 })
 
-var _ = Describe("[ebs-csi-e2e] [multi-az] Dynamic Provisioning", func() {
+var _ = Describe("[ebs-csi-e2e] [functional] Topology Aware Dynamic Provisioning", func() {
 	f := framework.NewDefaultFramework("ebs")
 	f.NamespacePodSecurityEnforceLevel = admissionapi.LevelPrivileged
 
@@ -829,6 +853,38 @@ var _ = Describe("[ebs-csi-e2e] [multi-az] Dynamic Provisioning", func() {
 		test.Run(cs, ns)
 	})
 })
+
+// multiAttachZone returns an availability zone with at least two schedulable
+// worker nodes, or "" if none exists. Multi-attach pins its volume to this zone
+// so both pods (forced onto different nodes by a topology spread constraint) can
+// attach the AZ-local EBS volume. It queries the live cluster rather than
+// assuming which AZ has multiple nodes, since node placement is set at cluster
+// creation independently of this test.
+func multiAttachZone(cs clientset.Interface) string {
+	nodes, err := cs.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		Fail(fmt.Sprintf("could not list nodes to find a multi-node AZ: %v", err))
+	}
+	nodesPerZone := map[string]int{}
+	for i := range nodes.Items {
+		node := &nodes.Items[i]
+		// Skip control-plane nodes; only workers run test pods.
+		if _, isControlPlane := node.Labels["node-role.kubernetes.io/control-plane"]; isControlPlane {
+			continue
+		}
+		zone := node.Labels[ebscsidriver.WellKnownZoneTopologyKey]
+		if zone == "" {
+			continue
+		}
+		nodesPerZone[zone]++
+	}
+	for zone, count := range nodesPerZone {
+		if count >= 2 {
+			return zone
+		}
+	}
+	return ""
+}
 
 func restClient(group string, version string) (restclientset.Interface, error) {
 	// setup rest client
