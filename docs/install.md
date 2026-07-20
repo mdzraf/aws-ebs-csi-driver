@@ -20,7 +20,7 @@ You may override the default metadata behavior of attempting IMDS, then falling 
 
 If the driver is able to access IMDS, it will utilize that as a preferred source of metadata. The EBS CSI Driver supports IMDSv1 and IMDSv2 (and will prefer IMDSv2 if both are available). However, by default, [IMDSv2 uses a hop limit of 1](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html#instance-metadata-v2-how-it-works). That will prevent the driver from accessing IMDSv2 if run inside a container with the default IMDSv2 configuration.
 
-In order for the driver to access IMDS, it either must be run in host networking mode, or with a [hop limit of at least 2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-IMDS-existing-instances.html#modify-PUT-response-hop-limit).
+In order for the driver to access IMDS, it either must be run in host networking mode, or with a [hop limit of at least 2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-IMDS-existing-instances.html#modify-PUT-response-hop-limit). CNI plugins other than the [Amazon VPC CNI plugin](https://github.com/aws/amazon-vpc-cni-k8s) may add additional routing layers and necessitate a higher hop limit. Consult the documentation of your CNI plugin as needed.
 
 #### Kubernetes Metadata
 
