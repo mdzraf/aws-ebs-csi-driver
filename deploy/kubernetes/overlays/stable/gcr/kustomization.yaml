@@ -19,7 +19,7 @@ images:
     newTag: v8.6.0
   - name: public.ecr.aws/csi-components/external-resizer
     newName: registry.k8s.io/sig-storage/csi-resizer
-    newTag: v2.2.0
+    newTag: v2.2.1
   - name: public.ecr.aws/csi-components/csi-node-driver-registrar
     newName: registry.k8s.io/sig-storage/csi-node-driver-registrar
     newTag: v2.17.0
